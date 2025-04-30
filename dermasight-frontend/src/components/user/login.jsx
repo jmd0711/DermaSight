@@ -1,14 +1,17 @@
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import PropTypes from 'prop-types'
 import { Button, Container, Form, FloatingLabel } from 'react-bootstrap'
 
 const Login = ({ setToken }) => {
   const [username, setUserName] = useState()
   const [password, setPassword] = useState()
+  const navigate=useNavigate()
 
   const handleSubmit = () => {
     //TODO: login using API
     setToken(username)
+    navigate('/')
   }
   return (
     <Container fluid className='main-page'>
