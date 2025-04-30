@@ -15,7 +15,7 @@ const RoutePages = () => {
     <Routes>
       <Route path="/" element={<HomePage />}/>
       <Route path="/login" element={<Login setToken={setToken} />}/>
-      <Route path="/signup" element={<SignUp />}/>
+      <Route path="/signup" element={<SignUp setToken={setToken} />}/>
       <Route element={<PrivateRoutes />}>
         <Route path="/upload" element={<Upload />}/>
         <Route path="/questionnaire" element={<Questionnaire />}/>
