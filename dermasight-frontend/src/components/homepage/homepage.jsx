@@ -2,7 +2,7 @@ import { Container } from 'react-bootstrap';
 
 const HomePage = () => {
   return (
-    <div>Test</div>
+    <div>HomePage</div>
 
   )
 }
