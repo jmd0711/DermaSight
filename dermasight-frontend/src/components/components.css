@@ -1,0 +1,49 @@
+:root {
+  --color1: #626F47;
+  --color2: #A4B465;
+  --color3: #F5ECD5;
+  --color4: #F0BB78;
+
+}
+
+.bg-navbar-color {
+  background-color: var(--color1);
+}
+
+.leaflet-container {
+  aspect-ratio: 5 / 3;
+  width: 100%;
+}
+
+.main-page {
+  height: 100vh;
+  background-color: var(--color2);
+}
+
+.side-bar,.main-body, .auth-body {
+  background-color: var(--color3);
+}
+
+.side-bar {
+  margin-left: 10%;
+  margin-right: 1%;
+}
+
+.side-bar-content, .device-details {
+  background-color: var(--color4);
+  color: #000000;
+}
+
+.device-details {
+  flex-grow: 1;
+}
+
+.main-body {
+  margin-right: 10%;
+  margin-left: 1%;
+}
+
+.auth-body {
+  margin-left: 25%;
+  margin-right: 25%;
+}

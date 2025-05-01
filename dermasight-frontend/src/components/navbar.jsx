@@ -23,7 +23,7 @@ const NavBar = () => {
   )
 
   return (
-    <Navbar bg="dark" data-bs-theme="dark" className="px-3">
+    <Navbar bg="navbar-color" data-bs-theme="dark" className="px-3">
       <Navbar.Brand href="/">DermaSight</Navbar.Brand>
       <Navbar.Toggle aria-controls="basic-navbar-nav" />
       <Navbar.Collapse className="justify-content-end">
