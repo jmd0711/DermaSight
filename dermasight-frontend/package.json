@@ -11,6 +11,7 @@
     "react": "^19.1.0",
     "react-bootstrap": "^2.10.9",
     "react-dom": "^19.1.0",
+    "react-dropzone": "^14.3.8",
     "react-easy-crop": "^5.4.1",
     "react-router-dom": "^7.5.3",
     "react-scripts": "^5.0.1",

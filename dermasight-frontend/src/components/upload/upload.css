@@ -1,0 +1,21 @@
+.upload-content {
+  padding-left: 30%;
+  padding-right: 30%;
+}
+
+.image-container {
+  border-style: dotted;
+  border-radius: 20px;
+  aspect-ratio: 1/1;
+  overflow: hidden;
+  position: relative;
+}
+
+.drop-zone {
+  display: flex;
+  justify-content: center;
+  align-items:center;
+  aspect-ratio: 1/1;
+  border-radius: 20px;
+  
+}

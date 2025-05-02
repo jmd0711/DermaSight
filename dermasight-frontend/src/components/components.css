@@ -16,8 +16,10 @@
 }
 
 .main-page {
-  height: 100vh;
+  height: 94vh;
   background-color: var(--color2);
+  padding-top: 4%;
+  padding-bottom: 10%;
 }
 
 .side-bar,.main-body, .auth-body {
@@ -38,12 +40,27 @@
   flex-grow: 1;
 }
 
+.title {
+  display: flex;
+  justify-content: center;
+}
+
 .main-body {
-  margin-right: 10%;
-  margin-left: 1%;
+  margin-left: 20%;
+  margin-right: 20%;
+  padding-top: 2%;
+  padding-left: 2%;
+  padding-right: 2%;
+  border-radius: 20px;
+  box-shadow: 5px 5px 5px gray;
 }
 
 .auth-body {
-  margin-left: 25%;
-  margin-right: 25%;
+  margin-left: 20%;
+  margin-right: 20%;
+  padding-top: 2%;
+  padding-left: 2%;
+  padding-right: 2%;
+  border-radius: 20px;
+  box-shadow: 5px 5px 5px gray;
 }
