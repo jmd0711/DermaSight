@@ -1,0 +1,14 @@
+.report-content {
+  padding-left: 10%;
+  padding-right: 10%;
+  height: 80%;
+}
+
+.report-buttons {
+  display: flex;
+  justify-content: right;
+  margin-top: 10px;
+  position: absolute;
+  bottom: 10%;
+  right: 10%;
+}

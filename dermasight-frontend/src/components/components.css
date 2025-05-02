@@ -46,18 +46,20 @@
 }
 
 .main-body {
-  margin-left: 20%;
-  margin-right: 20%;
+  margin-left: 15%;
+  margin-right: 15%;
   padding-top: 2%;
   padding-left: 2%;
   padding-right: 2%;
   border-radius: 20px;
   box-shadow: 5px 5px 5px gray;
+  overflow: hidden;
+  position: relative;
 }
 
 .auth-body {
-  margin-left: 20%;
-  margin-right: 20%;
+  margin-left: 15%;
+  margin-right: 15%;
   padding-top: 2%;
   padding-left: 2%;
   padding-right: 2%;

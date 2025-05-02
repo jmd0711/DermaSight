@@ -19,3 +19,9 @@
   border-radius: 20px;
   
 }
+
+.upload-buttons {
+  display: flex;
+  justify-content: right;
+  margin-top: 10px;
+}
