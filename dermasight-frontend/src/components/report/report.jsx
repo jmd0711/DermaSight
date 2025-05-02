@@ -19,8 +19,8 @@ const Report = () => {
         <h3 className="title text-dark mb-3">Report</h3>
         <Row className='report-content'>
           <Col xl={3} style={{borderRightStyle: 'dotted'}}>
-            <div>Skin Lesion Name</div>
-            <div>img</div>
+          <div style={{display: 'flex', justifyContent: 'center'}}>Skin Lesion Name</div>
+          <div className='skin-image'></div>
             <div>info</div>
           </Col>
           <Col>

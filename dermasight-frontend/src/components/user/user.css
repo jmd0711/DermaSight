@@ -1,0 +1,17 @@
+.profile-content {
+  padding-left: 10%;
+  padding-right: 10%;
+  height: 80%;
+}
+
+.user-image {
+  aspect-ratio: 1/1;
+  border-color: gray;
+  border-style: solid;
+  border-radius: 50%;
+  margin: 10%;
+}
+
+.card {
+  padding: 10px;
+}
