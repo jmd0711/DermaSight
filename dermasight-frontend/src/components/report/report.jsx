@@ -15,7 +15,7 @@ const Report = () => {
 
   return (
     <Container fluid className='main-page'>
-      <div className='main-body h-100'>
+      <div className='main-body'>
         <h3 className="title text-dark mb-3">Report</h3>
         <Row className='report-content'>
           <Col xl={3} style={{borderRightStyle: 'dotted'}}>

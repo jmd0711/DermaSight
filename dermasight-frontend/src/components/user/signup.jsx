@@ -16,7 +16,7 @@ const SignUp = ({ setToken }) => {
 
   return (
     <Container fluid className='main-page'>
-      <div className='auth-body h-100 py-3 px-5'>
+      <div className='main-body h-100'>
         <h3 className="text-dark mb-3">Sign Up</h3>
         <Form onSubmit={handleSubmit}>
           <FloatingLabel

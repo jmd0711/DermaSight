@@ -96,7 +96,7 @@ const Upload = () => {
   }
   return (
     <Container fluid className='main-page'>
-      <div className='main-body h-100'>
+      <div className='main-body'>
         <h3 className="title text-dark mb-3">Upload Image</h3>
         <div className='upload-content'>
           {dataURL ? (<ImageCrop />) : (<ImageUpload />)}
