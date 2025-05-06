@@ -11,7 +11,7 @@ const SignUp = ({ setToken }) => {
   const handleSubmit = () => {
     //TODO: login using API
     setToken(username)
-    navigate('/')
+    navigate('/profile')
   }
 
   return (
