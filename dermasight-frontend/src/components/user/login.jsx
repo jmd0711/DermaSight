@@ -8,10 +8,12 @@ const Login = ({ setToken }) => {
   const [password, setPassword] = useState()
   const navigate=useNavigate()
 
-  const handleSubmit = () => {
+  const handleSubmit = (e) => {
     //TODO: login using API
+    e.preventDefault()
     setToken(username)
     navigate('/profile')
+    navigate(0)
   }
   return (
     <Container fluid className='main-page'>

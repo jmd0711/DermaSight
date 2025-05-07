@@ -1,6 +1,6 @@
 .upload-content {
-  padding-left: 30%;
-  padding-right: 30%;
+  padding-left: 10%;
+  padding-right: 10%;
 }
 
 .image-container {
@@ -9,6 +9,8 @@
   aspect-ratio: 1/1;
   overflow: hidden;
   position: relative;
+  margin-left: 20%;
+  margin-right: 20%;
 }
 
 .drop-zone {
@@ -24,4 +26,9 @@
   display: flex;
   justify-content: right;
   margin-top: 10px;
+  margin-right: 20%;
+}
+
+.questionnaire-container {
+
 }

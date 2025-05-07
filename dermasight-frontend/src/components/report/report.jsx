@@ -1,8 +1,12 @@
+
+import { useState } from 'react'
 import { Button, Container, Form, FloatingLabel, Row, Col, Accordion } from 'react-bootstrap'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useLocation } from 'react-router-dom'
 import './report.css'
 
 const Report = () => {
+  const location = useLocation()
+  const data = location.state
   const navigate=useNavigate()
 
   const onDelete = () => {
@@ -19,9 +23,13 @@ const Report = () => {
         <h3 className="title text-dark mb-3">Report</h3>
         <Row className='report-content'>
           <Col xl={3} style={{borderRightStyle: 'dotted'}}>
-          <div style={{display: 'flex', justifyContent: 'center'}}>Skin Lesion Name</div>
-          <div className='skin-image'></div>
-            <div>info</div>
+            <div style={{display: 'flex', justifyContent: 'center'}}>Skin Lesion Name</div>
+            <img className='skin-image' src={data.image}></img>
+            <div>Location: {data.location}</div>
+            <div>Size: {data.size}</div>
+            <div>Duration: {data.duration}</div>
+            <div>Symptoms: {data.symptoms.join(", ")}</div>
+            <div>Additional Information: {data.additional}</div>
           </Col>
           <Col>
             <Accordion defaultActiveKey="0" flush>

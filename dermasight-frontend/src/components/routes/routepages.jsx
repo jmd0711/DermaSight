@@ -5,7 +5,7 @@ import About from '../about/about'
 import Login from '../user/login'
 import SignUp from '../user/signup'
 import Upload from '../upload/upload'
-import Questionnaire from '../questionnaire/questionnaire'
+import Chatbot from '../chatbot/chatbot'
 import Report from '../report/report'
 import Profile from '../user/profile'
 import useToken from '../usetoken'
@@ -20,7 +20,7 @@ const RoutePages = () => {
       <Route path="/signup" element={<SignUp setToken={setToken} />}/>
       <Route element={<PrivateRoutes />}>
         <Route path="/upload" element={<Upload />}/>
-        <Route path="/questionnaire" element={<Questionnaire />}/>
+        <Route path="/chatbot" element={<Chatbot />}/>
         <Route path="/report" element={<Report />}/>
         <Route path="/profile" element={<Profile />}/>
       </Route>

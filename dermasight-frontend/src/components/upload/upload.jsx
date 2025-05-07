@@ -1,16 +1,21 @@
 import '../components.css'
 import './upload.css'
-import { useNavigate } from 'react-router-dom'
+
 import { useCallback, useState, useRef } from 'react'
 import { Button, Container, Form, FloatingLabel } from 'react-bootstrap'
 import { useDropzone } from 'react-dropzone'
-import Cropper from 'react-easy-crop'
-
+import ImageCrop from './imagecrop'
+import Questionnaire from './questionnaire'
 
 
 const Upload = () => {
-  const [dataURL, setDataURL] = useState(null)
-  const navigate=useNavigate()
+
+
+  const [imageURL, setImageURL] = useState(null)
+  const [croppedImage, setCroppedImage] = useState(null)
+  const [data, setData] = useState(null)
+
+  
 
   const ImageUpload = () => {
     const onDrop = useCallback(acceptedFiles => {
@@ -20,7 +25,7 @@ const Upload = () => {
         reader.lonerror = () => console.log("file reading failed")
         reader.onload = () => {
           const binaryStr = reader.result
-          setDataURL(binaryStr)
+          setImageURL(binaryStr)
         }
         reader.readAsDataURL(file)
       })
@@ -55,51 +60,25 @@ const Upload = () => {
                   Drop your files here or click to browse
                 </div>
               )}
-            </div>
+        </div>
       </div>
     )
   }
-  
-  const ImageCrop = () => {
-    const [crop, setCrop] = useState({ x: 0, y: 0 })
-    const [zoom, setZoom] = useState(1)
-    const onCropComplete = (croppedArea, croppedAreaPixels) => {
-      //console.log(croppedArea, croppedAreaPixels)
-    }
-    const onDelete = () => {
-      setDataURL(null)
-    }
-    const onConfirm = () => {
-      navigate('/report')
-    }
-    return (
-      <div>
-        <div className='image-container'>
-          <div className="crop-container">
-            <Cropper
-              image={dataURL}
-              crop={crop}
-              zoom={zoom}
-              aspect={1 / 1}
-              onCropChange={setCrop}
-              onCropComplete={onCropComplete}
-              onZoomChange={setZoom}
-            />
-          </div>
-        </div>
-        <div className='upload-buttons'>
-          <Button variant='danger' onClick={onDelete} style={{marginRight: 10}}>Delete</Button>
-          <Button variant='primary' onClick={onConfirm}>Confirm</Button>
-        </div>
-      </div>
-    )
+
+
+
+  const renderContent = () => {
+    if (!imageURL) { return <ImageUpload /> }
+    else if (!croppedImage) {return <ImageCrop setImageURL={setImageURL} imageURL={imageURL} setCroppedImage={setCroppedImage} />}
+    else { return <Questionnaire croppedImage={croppedImage} setData={setData}/> }
   }
   return (
     <Container fluid className='main-page'>
       <div className='main-body'>
         <h3 className="title text-dark mb-3">Upload Image</h3>
         <div className='upload-content'>
-          {dataURL ? (<ImageCrop />) : (<ImageUpload />)}
+          {renderContent()}
+          {/* {imageURL ? (<ImageCrop />) : (<ImageUpload />)} */}
         </div>
       </div>
     </Container>

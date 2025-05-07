@@ -56,4 +56,5 @@
   box-shadow: 5px 5px 5px gray;
   overflow: hidden;
   position: relative;
+  overflow-y: scroll;
 }
