@@ -11,7 +11,7 @@ from werkzeug.security import generate_password_hash, check_password_hash
 app = Flask(__name__)
 
 # Connect to MongoDB
-app.config["MONGO_URI"] = "mongodb+srv://hoaiannguyen:dermasight123@cluster0.xc1ef5v.mongodb.net/DermaSight?retryWrites=true&w=majority&appName=Cluster0"
+app.config["MONGO_URI"] = ""
 mongo = PyMongo(app)
 CORS(app)
 
