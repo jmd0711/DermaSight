@@ -7,11 +7,25 @@ const SignUp = ({ setToken }) => {
   const [password, setPassword] = useState()
   const [email, setEmail] = useState()
   const navigate=useNavigate()
+  const [age, setAge] = useState("");
+  const [userId, setUserId] = useState(null);
+  const [error, setError] = useState("");
 
-  const handleSubmit = () => {
-    //TODO: login using API
-    setToken(username)
-    navigate('/profile')
+  const handleSubmit = async () => {
+    const res = await fetch("http://localhost:5000/signup", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username, email, password}),
+    });
+
+    const data = await res.json();
+    if (res.ok) {
+      setUserId(data.userId);
+      setError("");
+    } else {
+      setError(data.error || "Failed to create user");
+    }
+    navigate('/login')
   }
 
   return (
@@ -20,7 +34,7 @@ const SignUp = ({ setToken }) => {
         <h3 className="text-dark mb-3">Sign Up</h3>
         <Form onSubmit={handleSubmit}>
           <FloatingLabel
-            controlId="floatingInput"
+            controlId="username"
             label="Username"
             className="mb-3">
             <Form.Control
@@ -32,7 +46,7 @@ const SignUp = ({ setToken }) => {
             />
           </FloatingLabel>
           <FloatingLabel
-            controlId="floatingInput"
+            controlId="email"
             label="Email"
             className="mb-3">
             <Form.Control
@@ -44,7 +58,7 @@ const SignUp = ({ setToken }) => {
             />
           </FloatingLabel>
           <FloatingLabel
-            controlId="floatingInput"
+            controlId="password"
             label="Password"
             className="mb-3">
             <Form.Control

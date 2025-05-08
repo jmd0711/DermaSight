@@ -1,3 +1,4 @@
+import os
 from flask import Flask, request, jsonify
 from flask_pymongo import PyMongo
 from flask_cors import CORS
@@ -8,11 +9,11 @@ from utils.aws import upload_image_to_s3
 from werkzeug.security import generate_password_hash, check_password_hash
 
 app = Flask(__name__)
-CORS(app)
 
 # Connect to MongoDB
-app.config["MONGO_URI"] = MONGO_URI
+app.config["MONGO_URI"] = "mongodb+srv://hoaiannguyen:dermasight123@cluster0.xc1ef5v.mongodb.net/DermaSight?retryWrites=true&w=majority&appName=Cluster0"
 mongo = PyMongo(app)
+CORS(app)
 
 @app.route("/")
 def index():
@@ -22,10 +23,13 @@ def index():
 @app.route("/signup", methods=["POST"])
 def create_user():
     data = request.get_json()
-    if not all([data.get("username"), data.get("email"), data.get("password"), data.get("age")]):
-        return jsonify({"error": "Missing user data"}), 400
 
-    existing_user = mongo.db.users.find_one({"email": data["email"]})
+    if not all([data.get("username"), data.get("email"), data.get("password")]):
+        return jsonify({"error": "Missing user data"}), 400
+    
+    users = mongo.db.users
+
+    existing_user = users.find_one({"email": data["email"]})
     if existing_user:
         return jsonify({"error": "Email already registered"}), 409
 
@@ -36,7 +40,7 @@ def create_user():
         "age": data["age"],
         "skinProblemReports": []
     }
-    result = mongo.db.users.insert_one(user)
+    result = users.insert_one(user)
     return jsonify({"userId": str(result.inserted_id)}), 201
 
 @app.route("/login", methods=["POST"])
@@ -48,7 +52,8 @@ def login():
     if not username or not password:
         return jsonify({"error": "Missing username or password"}), 400
 
-    user = mongo.db.users.find_one({"username": username})
+    users = mongo.db.users
+    user = users.find_one({"username": username})
     if not user:
         return jsonify({"error": "User not found"}), 404
 
@@ -88,7 +93,7 @@ def upload_report():
         "recommendations": recommendations
     }
 
-    result = mongo.db.users.update_one(
+    result = mongo.db.DermaSight.update_one(
         {"_id": ObjectId(user_id)},
         {"$push": {"skinProblemReports": report}}
     )

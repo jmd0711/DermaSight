@@ -57,15 +57,17 @@ def index():
 
 
 # Change the route
-@app.route("/get", methods=["GET", "POST"])
+@app.route("/ask", methods=["GET", "POST"])
 def chat():
-    msg = request.form["msg"]
-    input = msg
-    print(input)
-    response = rag_chain.invoke({"input": msg})
-    print("Response : ", response["answer"])
-    return str(response["answer"])
+    data = request.get_json()  # Parse JSON body
+    msg = data.get("msg")      # Safely extract 'msg'
+    if not msg:
+        return jsonify({"error": "No message provided"}), 400
 
+    print("Input:", msg)
+    response = rag_chain.invoke({"input": msg})
+    print("Response:", response["answer"])
+    return jsonify({"answer": response["answer"]})
 
 if __name__ == '__main__':
     app.run(host="0.0.0.0", port= 8080, debug= True)
