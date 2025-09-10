@@ -12,3 +12,7 @@ Add your API keys in:
 
 To initiate a pinecone index and create a knowledgebase run:
 ### `python store_index.py`
+
+## Run
+In DermaSight/dermasight-backend run
+### `python dermaSight.py`
