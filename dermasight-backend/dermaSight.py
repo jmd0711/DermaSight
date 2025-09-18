@@ -15,15 +15,61 @@ from langchain.chains.combine_documents import create_stuff_documents_chain
 from langchain_core.prompts import ChatPromptTemplate
 from dotenv import load_dotenv
 from src.prompt import *
+import boto3
+from werkzeug.utils import secure_filename
+import tensorflow as tf
+import numpy as np, json, io, os
+from PIL import Image
+import keras  # standalone Keras 3
 
 app = Flask(__name__)
 
 load_dotenv()
 
 # Connect to MongoDB
-app.config["MONGO_URI"] = ""
+app.config["MONGO_URI"] = os.getenv("MONGO_URI")
 mongo = PyMongo(app)
 CORS(app)
+
+# Connect to AWS S3
+AWS_ACCESS_KEY = os.getenv("AWS_ACCESS_KEY")
+AWS_SECRET_KEY = os.getenv("AWS_SECRET_KEY")
+AWS_REGION = os.getenv("AWS_REGION")
+BUCKET_NAME = os.getenv("BUCKET_NAME")
+
+s3 = boto3.client(
+    "s3",
+    aws_access_key_id=AWS_ACCESS_KEY,
+    aws_secret_access_key=AWS_SECRET_KEY,
+    region_name=AWS_REGION
+)
+
+def upload_image_to_s3(file):
+    filename = secure_filename(file.filename)
+    content_type = file.content_type or "application/octet-stream"
+
+    # Ensure file pointer is at the start
+    file.seek(0)
+
+    s3.upload_fileobj(
+        Fileobj=file,
+        Bucket=BUCKET_NAME,
+        Key=filename,
+        ExtraArgs={"ACL": "public-read", "ContentType": content_type}
+    )
+
+    url = f"https://{BUCKET_NAME}.s3.{AWS_REGION}.amazonaws.com/{filename}"
+    return url
+
+# Load model and labels once at startup
+IMG_SIZE = (128, 128) 
+ALLOWED_EXT = {"jpg", "jpeg", "png"}
+
+DIVIDE_BY_255 = False
+
+model = keras.models.load_model("skin_mobilenetv3.keras", compile=False)
+with open("mobilenetv3_labels.json") as f:
+    CLASS_NAMES = json.load(f)
 
 @app.route("/")
 def index():
@@ -77,6 +123,55 @@ def login():
         "username": user["username"]
     })
 
+# Picture upload
+def allowed_file(filename: str) -> bool:
+    return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_EXT
+
+def prepare(img_bytes: bytes) -> np.ndarray:
+    img = Image.open(io.BytesIO(img_bytes)).convert("RGB").resize(IMG_SIZE)
+    x = np.array(img, dtype=np.float32)[None, ...]  # shape (1, H, W, 3)
+    if DIVIDE_BY_255:
+        x = x / 255.0
+    return x
+
+# Get skin condition by image
+@app.post("/predict")
+def predict():
+    if "image" not in request.files:
+        return jsonify({"error": "missing 'image' form field"}), 400
+
+    file = request.files["image"]
+    if file.filename == "":
+        return jsonify({"error": "empty filename"}), 400
+    if not allowed_file(file.filename):
+        return jsonify({"error": f"unsupported file type; use {sorted(ALLOWED_EXT)}"}), 400
+
+    img_bytes = file.read()
+    if len(img_bytes) == 0:
+        return jsonify({"error": "empty file"}), 400
+
+    try:
+        x = prepare(img_bytes)
+    except Exception as e:
+        return jsonify({"error": f"could not read image: {str(e)}"}), 400
+
+    preds = model.predict(x)
+    probs = preds[0]  # shape (num_classes,)
+
+    # Top-1
+    top_idx = int(np.argmax(probs))
+    top = {"label": CLASS_NAMES[top_idx], "prob": round(float(probs[top_idx]) * 100, 2)}
+
+    # Top-3
+    top3_idx = np.argsort(probs)[-3:][::-1]
+    top3 = [{"label": CLASS_NAMES[int(i)], "prob": round(float(probs[i]) * 100, 2)}
+    for i in top3_idx
+    ]
+
+    return jsonify({
+        "top": top,
+        "top3": top3
+    })
 
 # Upload skin lesion image and store ML report
 @app.route("/upload", methods=["POST"])
@@ -84,27 +179,27 @@ def upload_report():
     file = request.files.get("image")
     user_id = request.form.get("userId")
     condition = request.form.get("skinCondition")
-    recommendations = request.form.get("recommendations")
 
-    if not file or not user_id:
-        return jsonify({"error": "Missing image or userId"}), 400
+    # Check required inputs
+    if file is None or file.filename == "":
+        return jsonify({"error": "No file uploaded"}), 400
+    if not user_id:
+        return jsonify({"error": "Missing userId"}), 400
+
     try:
         image_url = upload_image_to_s3(file)
     except Exception as e:
         return jsonify({"error": f"S3 upload failed: {str(e)}"}), 500
 
-    # Upload image to AWS S3 and get the URL
-    image_url = upload_image_to_s3(file)
-
-    # Save the report to MongoDB
+    # Create report object
     report = {
         "imageUrl": image_url,
         "dateGenerated": datetime.utcnow(),
-        "skinCondition": condition,
-        "recommendations": recommendations
+        "skinCondition": condition
     }
 
-    result = mongo.db.DermaSight.update_one(
+    # Save to MongoDB under user's skinProblemReports array
+    result = mongo.db.users.update_one(
         {"_id": ObjectId(user_id)},
         {"$push": {"skinProblemReports": report}}
     )
@@ -112,20 +207,7 @@ def upload_report():
     if result.modified_count == 0:
         return jsonify({"error": "User not found or report not saved"}), 404
 
-
-    return jsonify({"message": "Report Uploaded", "imageUrl": image_url})
-
-# Get treatment plan
-@app.route("/treatment/<lesion_type>", methods=["GET"])
-def get_treatment(lesion_type):
-    treatment_data = mongo.db.treatments.find_one({"lesionType": lesion_type.lower()})
-    if treatment_data:
-        return jsonify({
-            "lesionType": treatment_data["lesionType"],
-            "treatment": treatment_data["treatment"]
-        }), 200
-    else:
-        return jsonify({"error": "Treatment not found for this lesion type."}), 404
+    return jsonify({"message": "Report Uploaded", "imageUrl": image_url}), 200
 
 
 # Chatbot
