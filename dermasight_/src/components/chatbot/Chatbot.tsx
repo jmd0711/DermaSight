@@ -29,9 +29,10 @@ const Chatbot = () => {
       const response = await chatApi.sendMessage(inputMessage);
 
       if (response.success && response.data) {
+        console.log(response)
         const botMessage: ChatMessage = {
           id: (Date.now() + 1).toString(),
-          content: response.data.response,
+          content: response.data.response.answer,
           sender: 'bot',
           timestamp: new Date(),
           messageType: 'text',

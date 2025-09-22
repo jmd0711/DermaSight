@@ -31,10 +31,12 @@ class ApiClient {
 
     // Separate client for chatbot
     this.chatbotClient = axios.create({
-      baseURL: API_CONFIG.CHATBOT_URL,
+      // baseURL: API_CONFIG.CHATBOT_URL,
+      baseURL: API_CONFIG.BASE_URL,
       timeout: API_CONFIG.TIMEOUT,
       headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
+        'Content-Type': 'application/json',
+        // 'Content-Type': 'application/x-www-form-urlencoded',
       },
     });
 
@@ -178,11 +180,12 @@ class ApiClient {
   // Chatbot API
   async sendChatMessage(message: string): Promise<ApiResponse<{ response: string }>> {
     try {
-      const formData = new URLSearchParams();
-      formData.append('msg', message);
+      // const formData = new URLSearchParams();
+      // formData.append('msg', message);
+      const formData = { "msg": message }
 
       const response: AxiosResponse<string> = 
-        await this.chatbotClient.post('/get', formData);
+        await this.chatbotClient.post('/ask', formData);
 
       return {
         success: true,
