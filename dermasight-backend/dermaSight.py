@@ -1,9 +1,14 @@
 import os
 from flask import Flask, request, jsonify
+from flask_jwt_extended import (
+    JWTManager, create_access_token, create_refresh_token,
+    jwt_required, get_jwt_identity,
+)
 from flask_pymongo import PyMongo
 from flask_cors import CORS
 from bson import ObjectId
-from datetime import datetime
+from bson.errors import InvalidId
+from datetime import datetime, timedelta
 from config import MONGO_URI
 from utils.aws import upload_image_to_s3
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -27,11 +32,15 @@ app = Flask(__name__)
 load_dotenv()
 
 # Connect to MongoDB
-<<<<<<< HEAD
 app.config["MONGO_URI"] = os.environ.get('MONGO_URI')
-=======
-app.config["MONGO_URI"] = os.getenv("MONGO_URI")
->>>>>>> e81a00df099fc374ec3e3ad86214f105584e24ed
+
+#Configure JWT
+app.config["JWT_SECRET_KEY"] = os.getenv("JWT_SECRET_KEY") or "dev-only-change-me" #change this later
+app.config["JWT_TOKEN_LOCATION"] = ["headers"]
+app.config["JWT_ACCESS_TOKEN_EXPIRES"] = timedelta(minutes=15)
+app.config["JWT_REFRESH_TOKEN_EXPIRES"] = timedelta(days=7)
+
+jwt = JWTManager(app)
 mongo = PyMongo(app)
 CORS(app)
 
@@ -39,7 +48,7 @@ CORS(app)
 AWS_ACCESS_KEY = os.getenv("AWS_ACCESS_KEY")
 AWS_SECRET_KEY = os.getenv("AWS_SECRET_KEY")
 AWS_REGION = os.getenv("AWS_REGION")
-BUCKET_NAME = os.getenv("BUCKET_NAME")
+BUCKET_NAME = os.getenv("S3_BUCKET_NAME")
 
 s3 = boto3.client(
     "s3",
@@ -92,6 +101,10 @@ def create_user():
     existing_user = users.find_one({"email": data["email"]})
     if existing_user:
         return jsonify({"error": "Email already registered"}), 409
+    
+    existing = users.find_one({"username": data["username"]})
+    if existing:
+        return jsonify({"error": "Username already in use" }), 409
 
     user = {
         "username": data["username"],
@@ -120,12 +133,27 @@ def login():
 
     if not check_password_hash(user["password"], password):
         return jsonify({"error": "Incorrect password"}), 401
+    
+    identity = str(user["_id"])
+    claims = {"role": user.get("role", "user")}
+    access = create_access_token(identity=identity, additional_claims=claims)
+    refresh = create_refresh_token(identity=identity, additional_claims=claims)
 
     return jsonify({
         "message": "Login successful",
         "userId": str(user["_id"]),
-        "username": user["username"]
+        "username": user["username"],
+        "access": access, 
+        "refresh": refresh
     })
+
+@app.post("/auth/refresh")
+@jwt_required(refresh=True)
+def refresh():
+    identity = get_jwt_identity()
+    new_access = create_access_token(identity=identity)
+    return {"access": new_access}, 200
+
 
 # Picture upload
 def allowed_file(filename: str) -> bool:
@@ -179,10 +207,16 @@ def predict():
 
 # Upload skin lesion image and store ML report
 @app.route("/upload", methods=["POST"])
+@jwt_required()
 def upload_report():
     file = request.files.get("image")
-    user_id = request.form.get("userId")
     condition = request.form.get("skinCondition")
+
+    user_id = get_jwt_identity()
+    try:
+        uid = ObjectId(user_id)
+    except InvalidId:
+        return jsonify({"error": "Invalid user identity"}), 401
 
     # Check required inputs
     if file is None or file.filename == "":
@@ -204,7 +238,7 @@ def upload_report():
 
     # Save to MongoDB under user's skinProblemReports array
     result = mongo.db.users.update_one(
-        {"_id": ObjectId(user_id)},
+        {"_id": ObjectId(uid)},
         {"$push": {"skinProblemReports": report}}
     )
 
