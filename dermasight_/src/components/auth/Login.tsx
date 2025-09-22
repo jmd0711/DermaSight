@@ -41,6 +41,7 @@ const Login = ({ setToken }: AuthComponentProps) => {
       setToken(authToken);
       router.push('/profile');
       router.refresh();
+      window.location.href = ('/profile')
     }
   };
 
