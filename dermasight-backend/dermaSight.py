@@ -27,11 +27,7 @@ app = Flask(__name__)
 load_dotenv()
 
 # Connect to MongoDB
-<<<<<<< HEAD
-app.config["MONGO_URI"] = os.environ.get('MONGO_URI')
-=======
 app.config["MONGO_URI"] = os.getenv("MONGO_URI")
->>>>>>> e81a00df099fc374ec3e3ad86214f105584e24ed
 mongo = PyMongo(app)
 CORS(app)
 
