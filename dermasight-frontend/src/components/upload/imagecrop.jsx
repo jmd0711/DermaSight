@@ -1,32 +1,34 @@
 import { useState } from 'react'
 import { Button } from 'react-bootstrap'
-
 import Cropper from 'react-easy-crop'
 import getCroppedImg from './cropImage'
 
-const ImageCrop = ({setImageURL, imageURL, setCroppedImage}) => {
+const ImageCrop = ({ setImageURL, imageURL, setCroppedImage }) => {
   const [crop, setCrop] = useState({ x: 0, y: 0 })
   const [zoom, setZoom] = useState(1)
   const [croppedAreaPixels, setCroppedAreaPixels] = useState(null)
-  const onCropComplete = (croppedArea, croppedAreaPixels) => {
-    //console.log(croppedArea, croppedAreaPixels))
+
+  const onCropComplete = (_, croppedAreaPixels) => {
     setCroppedAreaPixels(croppedAreaPixels)
   }
+
   const onDelete = () => {
     setImageURL(null)
+    setCroppedImage(null)
   }
+
   const onConfirm = async () => {
     try {
-      const croppedImage = await getCroppedImg(
-        imageURL,
-        croppedAreaPixels
-      )
-      console.log('done', { croppedImage })
-      setCroppedImage(croppedImage)
-    } catch (e) {
-      console.error(e)
+      const blob = await getCroppedImg(imageURL, croppedAreaPixels)
+      // convert blob to File for FormData
+      const file = new File([blob], 'lesion.jpg', { type: 'image/jpeg' })
+      setCroppedImage(file)  // store the File object instead of URL
+    } catch (err) {
+      console.error(err)
+      alert("Failed to crop image")
     }
   }
+
   return (
     <div>
       <div className='image-container'>
@@ -50,4 +52,4 @@ const ImageCrop = ({setImageURL, imageURL, setCroppedImage}) => {
   )
 }
 
-export default ImageCrop;
+export default ImageCrop

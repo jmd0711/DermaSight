@@ -35,7 +35,7 @@ load_dotenv()
 app.config["MONGO_URI"] = os.environ.get('MONGO_URI')
 
 #Configure JWT
-app.config["JWT_SECRET_KEY"] = os.getenv("JWT_SECRET_KEY") or "dev-only-change-me" #change this later
+app.config["JWT_SECRET_KEY"] = os.getenv("JWT_SECRET_KEY") or "f1e3b5c8d2a1f6e7c9b8d7a6e4c3f2b1d0a9e8f7c6b5d4a3e2f1c0b9d8a7e6f5" #change this later
 app.config["JWT_TOKEN_LOCATION"] = ["headers"]
 app.config["JWT_ACCESS_TOKEN_EXPIRES"] = timedelta(minutes=15)
 app.config["JWT_REFRESH_TOKEN_EXPIRES"] = timedelta(days=7)
@@ -110,7 +110,7 @@ def create_user():
         "username": data["username"],
         "email": data["email"],
         "password": generate_password_hash(data["password"]),
-        "age": data["age"],
+        "age": data.get("age"),  # use .get() so missing age is None
         "skinProblemReports": []
     }
     result = users.insert_one(user)
@@ -205,48 +205,111 @@ def predict():
         "top3": top3
     })
 
-# Upload skin lesion image and store ML report
+# Upload skin lesion image, questionnaire + store ML report
 @app.route("/upload", methods=["POST"])
 @jwt_required()
 def upload_report():
     file = request.files.get("image")
-    condition = request.form.get("skinCondition")
-
+    location = request.form.get("location")
+    size = request.form.get("size")
+    duration = request.form.get("duration")
+    symptoms = request.form.getlist("symptoms")
+    additional = request.form.get("additional", "")
+    
     user_id = get_jwt_identity()
     try:
         uid = ObjectId(user_id)
-    except InvalidId:
+    except:
         return jsonify({"error": "Invalid user identity"}), 401
 
-    # Check required inputs
+    # Validate
     if file is None or file.filename == "":
         return jsonify({"error": "No file uploaded"}), 400
-    if not user_id:
-        return jsonify({"error": "Missing userId"}), 400
 
+    # Upload image to S3 (or wherever)
     try:
         image_url = upload_image_to_s3(file)
     except Exception as e:
         return jsonify({"error": f"S3 upload failed: {str(e)}"}), 500
 
+    # Run prediction
+    try:
+        file.seek(0)
+        img_bytes = file.read()
+        x = prepare(img_bytes)  # preprocess for ML model
+        preds = model.predict(x)
+        probs = preds[0]
+        top_idx = int(np.argmax(probs))
+        skin_condition = CLASS_NAMES[top_idx]
+        confidence = round(float(probs[top_idx]) * 100, 2)
+    except Exception as e:
+        return jsonify({"error": f"Prediction failed: {str(e)}"}), 500
+
     # Create report object
     report = {
         "imageUrl": image_url,
         "dateGenerated": datetime.utcnow(),
-        "skinCondition": condition
+        "location": location,
+        "size": size,
+        "duration": duration,
+        "symptoms": symptoms,
+        "additional": additional,
+        "skinCondition": skin_condition,
+        "confidence": confidence,
     }
 
-    # Save to MongoDB under user's skinProblemReports array
+    # Save report to user's profile
     result = mongo.db.users.update_one(
-        {"_id": ObjectId(uid)},
+        {"_id": uid},
         {"$push": {"skinProblemReports": report}}
     )
 
     if result.modified_count == 0:
         return jsonify({"error": "User not found or report not saved"}), 404
 
-    return jsonify({"message": "Report Uploaded", "imageUrl": image_url}), 200
+    return jsonify({
+        "message": "Report Uploaded",
+        "imageUrl": image_url,
+        "skinCondition": skin_condition,
+        "confidence": confidence,
+        "report": report
+    }), 200
 
+# Get User reports
+@app.route("/user/reports", methods=["GET"])
+@jwt_required()
+def get_user_reports():
+    user_id = get_jwt_identity()
+    try:
+        uid = ObjectId(user_id)
+    except InvalidId:
+        return jsonify({"error": "Invalid user identity"}), 401
+
+    user = mongo.db.users.find_one({"_id": uid}, {"skinProblemReports": 1})
+    if not user:
+        return jsonify({"error": "User not found"}), 404
+
+    return jsonify({"reports": user.get("skinProblemReports", [])}), 200
+
+# Delete Report
+@app.route("/user/reports/<report_id>", methods=["DELETE"])
+@jwt_required()
+def delete_report(report_id):
+    user_id = get_jwt_identity()
+    try:
+        uid = ObjectId(user_id)
+    except:
+        return jsonify({"error": "Invalid user ID"}), 401
+
+    result = mongo.db.users.update_one(
+        {"_id": uid},
+        {"$pull": {"skinProblemReports": {"_id": ObjectId(report_id)}}}
+    )
+
+    if result.modified_count == 0:
+        return jsonify({"error": "Report not found"}), 404
+
+    return jsonify({"message": "Report deleted"}), 200
 
 # Chatbot
 PINECONE_API_KEY=os.environ.get('PINECONE_API_KEY')
@@ -283,18 +346,53 @@ prompt = ChatPromptTemplate.from_messages(
 question_answer_chain = create_stuff_documents_chain(llm, prompt)
 rag_chain = create_retrieval_chain(retriever, question_answer_chain)
 
-# Change the route
-@app.route("/ask", methods=["GET", "POST"])
+@app.route("/ask", methods=["POST"])
+@jwt_required()
 def chat():
-    data = request.get_json()  # Parse JSON body
-    msg = data.get("msg")      # Extract 'msg'
+    user_id = get_jwt_identity()
+    try:
+        uid = ObjectId(user_id)
+    except Exception:
+        return jsonify({"error": "Invalid user ID"}), 401
+
+    data = request.get_json()
+    msg = data.get("msg")
     if not msg:
         return jsonify({"error": "No message provided"}), 400
 
-    print("Input:", msg)
-    response = rag_chain.invoke({"input": msg})
-    print("Response:", response["answer"])
-    return jsonify({"answer": response["answer"]})
+    # Fetch most recent report from user's skinProblemReports
+    user = mongo.db.users.find_one(
+        {"_id": uid},
+        {"skinProblemReports": {"$slice": -1}}  # only last report
+    )
+
+    latest_report = None
+    if user and "skinProblemReports" in user and len(user["skinProblemReports"]) > 0:
+        latest_report = user["skinProblemReports"][0]
+
+    # Inject context from latest report
+    if latest_report:
+        context_prompt = (
+            f"User has a skin lesion with the following details:\n"
+            f"- Location: {latest_report.get('location', 'unknown')}\n"
+            f"- Size: {latest_report.get('size', 'unknown')}\n"
+            f"- Duration: {latest_report.get('duration', 'unknown')}\n"
+            f"- Symptoms: {', '.join(latest_report.get('symptoms', [])) or 'none'}\n"
+            f"- Notes: {latest_report.get('additional', 'none')}\n"
+            f"- Predicted condition: {latest_report.get('skinCondition', 'N/A')} "
+            f"(confidence {latest_report.get('confidence', 'N/A')}%)\n\n"
+            f"Now the user says: {msg}"
+        )
+    else:
+        context_prompt = f"User has no reports saved. The user says: {msg}"
+
+    response = rag_chain.invoke({"input": context_prompt})
+
+    return jsonify({
+        "answer": response["answer"],
+        "report_used": latest_report
+    })
+
 
 if __name__ == "__main__":
     app.run(debug=True)
