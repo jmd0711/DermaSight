@@ -24,8 +24,12 @@ import boto3
 from werkzeug.utils import secure_filename
 import tensorflow as tf
 import numpy as np, json, io, os
-from PIL import Image
+from PIL import Image, UnidentifiedImageError
 import keras  # standalone Keras 3
+# at startup
+from pillow_heif import register_heif_opener
+register_heif_opener()
+
 
 app = Flask(__name__)
 
@@ -57,26 +61,35 @@ s3 = boto3.client(
     region_name=AWS_REGION
 )
 
-def upload_image_to_s3(file):
-    filename = secure_filename(file.filename)
-    content_type = file.content_type or "application/octet-stream"
+def upload_image_to_s3_bytes(img_bytes: bytes, filename: str, content_type: str | None):
+    filename = secure_filename(filename)
+    content_type = content_type or "application/octet-stream"
 
-    # Ensure file pointer is at the start
-    file.seek(0)
+    bio = io.BytesIO(img_bytes)
+    bio.seek(0)  # ensure pointer at start
 
     s3.upload_fileobj(
-        Fileobj=file,
+        Fileobj=bio,
         Bucket=BUCKET_NAME,
         Key=filename,
-        ExtraArgs={"ACL": "public-read", "ContentType": content_type}
+        ExtraArgs={"ACL": "public-read", "ContentType": content_type},
     )
+    return f"https://{BUCKET_NAME}.s3.{AWS_REGION}.amazonaws.com/{filename}"
 
-    url = f"https://{BUCKET_NAME}.s3.{AWS_REGION}.amazonaws.com/{filename}"
-    return url
+def predict_from_bytes(img_bytes: bytes):
+    if not img_bytes:
+        raise ValueError("empty file")
 
+    x = prepare(img_bytes)  
+    probs = model.predict(x)[0]
+    top_idx = int(np.argmax(probs))
+    top = {"label": CLASS_NAMES[top_idx], "prob": round(float(probs[top_idx]) * 100, 2)}
+    top3_idx = np.argsort(probs)[-3:][::-1]
+    top3 = [{"label": CLASS_NAMES[int(i)], "prob": round(float(probs[i]) * 100, 2)} for i in top3_idx]
+    return top, top3
 # Load model and labels once at startup
 IMG_SIZE = (128, 128) 
-ALLOWED_EXT = {"jpg", "jpeg", "png"}
+ALLOWED_EXT = {"jpg", "jpeg", "png", "webp", "heic", "heif", "avif"}
 
 DIVIDE_BY_255 = False
 
@@ -160,8 +173,17 @@ def allowed_file(filename: str) -> bool:
     return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_EXT
 
 def prepare(img_bytes: bytes) -> np.ndarray:
-    img = Image.open(io.BytesIO(img_bytes)).convert("RGB").resize(IMG_SIZE)
-    x = np.array(img, dtype=np.float32)[None, ...]  # shape (1, H, W, 3)
+    try:
+        with Image.open(io.BytesIO(img_bytes)) as test_im:
+            test_im.verify() 
+        with Image.open(io.BytesIO(img_bytes)) as im:
+            im = im.convert("RGB").resize(IMG_SIZE)
+            x = np.array(im, dtype=np.float32)[None, ...]
+    except UnidentifiedImageError:
+        raise ValueError("unsupported or corrupt image format (try JPG/PNG).")
+    except OSError as e:
+        raise ValueError(f"image decode error: {e}")
+
     if DIVIDE_BY_255:
         x = x / 255.0
     return x
@@ -169,41 +191,12 @@ def prepare(img_bytes: bytes) -> np.ndarray:
 # Get skin condition by image
 @app.post("/predict")
 def predict():
-    if "image" not in request.files:
-        return jsonify({"error": "missing 'image' form field"}), 400
-
-    file = request.files["image"]
-    if file.filename == "":
-        return jsonify({"error": "empty filename"}), 400
-    if not allowed_file(file.filename):
-        return jsonify({"error": f"unsupported file type; use {sorted(ALLOWED_EXT)}"}), 400
-
-    img_bytes = file.read()
-    if len(img_bytes) == 0:
-        return jsonify({"error": "empty file"}), 400
-
+    file = request.files.get("image")
     try:
-        x = prepare(img_bytes)
-    except Exception as e:
-        return jsonify({"error": f"could not read image: {str(e)}"}), 400
-
-    preds = model.predict(x)
-    probs = preds[0]  # shape (num_classes,)
-
-    # Top-1
-    top_idx = int(np.argmax(probs))
-    top = {"label": CLASS_NAMES[top_idx], "prob": round(float(probs[top_idx]) * 100, 2)}
-
-    # Top-3
-    top3_idx = np.argsort(probs)[-3:][::-1]
-    top3 = [{"label": CLASS_NAMES[int(i)], "prob": round(float(probs[i]) * 100, 2)}
-    for i in top3_idx
-    ]
-
-    return jsonify({
-        "top": top,
-        "top3": top3
-    })
+        top, top3 = predict_from_file(file)
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    return jsonify({"top": top, "top3": top3})
 
 # Upload skin lesion image and store ML report
 @app.route("/upload", methods=["POST"])
@@ -224,16 +217,31 @@ def upload_report():
     if not user_id:
         return jsonify({"error": "Missing userId"}), 400
 
-    try:
-        image_url = upload_image_to_s3(file)
-    except Exception as e:
-        return jsonify({"error": f"S3 upload failed: {str(e)}"}), 500
+    
+    img_bytes = file.read() 
+    if not img_bytes:
+        return jsonify({"error": "empty file"}), 400
 
+    try:
+        top, top3 = predict_from_bytes(img_bytes)
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    
+    try:
+        image_url = upload_image_to_s3_bytes(img_bytes, file.filename, file.mimetype)
+    except Exception as e:
+        return jsonify({"error": f"S3 upload failed: {e.__class__.__name__}: {e}"}), 502
+
+    condition = mongo.db.treatments.find_one(
+        { "lesionType": top["label"]}
+    )
     # Create report object
     report = {
         "imageUrl": image_url,
         "dateGenerated": datetime.utcnow(),
-        "skinCondition": condition
+        "skinCondition": top["label"],
+        "confidence": top["prob"],
+        "treatment": condition["treatment"]
     }
 
     # Save to MongoDB under user's skinProblemReports array
@@ -245,7 +253,10 @@ def upload_report():
     if result.modified_count == 0:
         return jsonify({"error": "User not found or report not saved"}), 404
 
-    return jsonify({"message": "Report Uploaded", "imageUrl": image_url}), 200
+    return jsonify({"message": "Report Uploaded", 
+                    "imageUrl": image_url,
+                    "top": top,
+                    "top3": top3}), 200
 
 
 # Chatbot
