@@ -1,8 +1,8 @@
 'use client';
 
-import { useState, useCallback } from 'react';
-import { authApi, chatApi, uploadApi } from '@/lib/api';
-import { LoginCredentials, SignupData, ApiResponse } from '@/types';
+import { useState, useCallback, useEffect } from 'react';
+import { authApi, chatApi, uploadApi, default as apiClient } from '@/lib/api';
+import { LoginCredentials, SignupData, ApiResponse, MedicalReport } from '@/types';
 
 // Authentication hook
 export const useAuth = () => {
@@ -121,5 +121,44 @@ export const useUpload = () => {
     error, 
     progress,
     clearError: () => setError(null) 
+  };
+};
+
+// User Hook
+export const useUserReports = () => {
+  const [reports, setReports] = useState<MedicalReport[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchReports = useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const response: ApiResponse<{ reports: MedicalReport[] }> = 
+        await apiClient.getUserReports();
+
+      if (response.success && response.data?.reports) {
+        setReports(response.data.reports);
+      } else {
+        setError(response.error || 'Failed to fetch reports');
+      }
+    } catch (err) {
+      setError('Network error occurred');
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchReports();
+  }, [fetchReports]);
+
+  return {
+    reports,
+    isLoading,
+    error,
+    refetch: fetchReports,
+    clearError: () => setError(null),
   };
 };

@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import useToken from '@/hooks/useToken';
+import { useUserReports } from '@/hooks/useApi';
 
 interface SavedReport {
   id: string;
@@ -14,7 +15,8 @@ interface SavedReport {
 
 const Profile = () => {
   const { token, isAuthenticated } = useToken();
-  const [savedReports, setSavedReports] = useState<SavedReport[]>([]);
+  //const [savedReports, setSavedReports] = useState<SavedReport[]>([]);
+  const { reports, isLoading: isLoadingReports, error } = useUserReports();
   const router = useRouter();
 
   useEffect(() => {
@@ -24,28 +26,28 @@ const Profile = () => {
     }
 
     // Load saved reports from localStorage (in production, this would come from API)
-    const reports = localStorage.getItem('savedReports');
-    if (reports) {
-      setSavedReports(JSON.parse(reports));
-    } else {
-      // Demo data for now
-      setSavedReports([
-        {
-          id: '1',
-          image: '/placeholder-skin.jpg',
-          location: 'Face',
-          date: '2024-01-15',
-          symptoms: ['Itching', 'Redness']
-        },
-        {
-          id: '2', 
-          image: '/placeholder-skin.jpg',
-          location: 'Arm',
-          date: '2024-01-10',
-          symptoms: ['Pain', 'Swelling']
-        }
-      ]);
-    }
+    //const reports = localStorage.getItem('savedReports');
+    // if (reports) {
+    //   setSavedReports(JSON.parse(reports));
+    // } else {
+    //   // Demo data for now
+    //   setSavedReports([
+    //     {
+    //       id: '1',
+    //       image: '/placeholder-skin.jpg',
+    //       location: 'Face',
+    //       date: '2024-01-15',
+    //       symptoms: ['Itching', 'Redness']
+    //     },
+    //     {
+    //       id: '2', 
+    //       image: '/placeholder-skin.jpg',
+    //       location: 'Arm',
+    //       date: '2024-01-10',
+    //       symptoms: ['Pain', 'Swelling']
+    //     }
+    //   ]);
+    // }
   }, [isAuthenticated, router]);
 
   const handleViewReport = (reportId: string) => {
@@ -54,10 +56,10 @@ const Profile = () => {
   };
 
   const handleDeleteReport = (reportId: string) => {
-    setSavedReports(prev => prev.filter(report => report.id !== reportId));
-    // Update localStorage
-    const updatedReports = savedReports.filter(report => report.id !== reportId);
-    localStorage.setItem('savedReports', JSON.stringify(updatedReports));
+    // setSavedReports(prev => prev.filter(report => report.id !== reportId));
+    // // Update localStorage
+    // const updatedReports = savedReports.filter(report => report.id !== reportId);
+    // localStorage.setItem('savedReports', JSON.stringify(updatedReports));
   };
 
   if (!isAuthenticated) {
@@ -67,6 +69,22 @@ const Profile = () => {
       </div>
     );
   }
+
+  if (isLoadingReports) {
+  return (
+    <div className="main-container min-h-screen flex items-center justify-center">
+      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-custom"></div>
+    </div>
+  );
+}
+
+// if (error) {
+//   return (
+//     <div className="main-container min-h-screen flex items-center justify-center">
+//       <p className="text-red-500 font-medium">{error}</p>
+//     </div>
+//   );
+// }
 
   return (
     <div className="main-container min-h-screen p-4 sm:p-6">
@@ -90,7 +108,7 @@ const Profile = () => {
                   <span className="text-2xl text-white">👤</span>
                 </div>
                 <h2 className="text-xl font-semibold text-gray-800 mb-2">
-                  {token || 'User'}
+                  {JSON.parse(localStorage.getItem('token')).user.username || 'User'}
                 </h2>
                 <p className="text-gray-600 text-sm mb-4">
                   DermaSight Member
@@ -100,7 +118,7 @@ const Profile = () => {
               <div className="space-y-3 pt-4 border-t border-gray-200">
                 <div className="flex justify-between text-sm">
                   <span className="text-gray-600">Reports:</span>
-                  <span className="font-medium text-gray-800">{savedReports.length}</span>
+                  <span className="font-medium text-gray-800">{reports.length}</span>
                 </div>
                 <div className="flex justify-between text-sm">
                   <span className="text-gray-600">Member since:</span>
@@ -129,11 +147,11 @@ const Profile = () => {
                   📊 Analysis History
                 </h2>
                 <span className="text-sm text-gray-600">
-                  {savedReports.length} report{savedReports.length !== 1 ? 's' : ''}
+                  {reports.length} report{reports.length !== 1 ? 's' : ''}
                 </span>
               </div>
 
-              {savedReports.length === 0 ? (
+              {reports.length === 0 ? (
                 <div className="text-center py-12">
                   <div className="w-16 h-16 bg-gray-100 rounded-full mx-auto mb-4 flex items-center justify-center">
                     <span className="text-2xl">📄</span>
@@ -153,7 +171,7 @@ const Profile = () => {
                 </div>
               ) : (
                 <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {savedReports.map((report, index) => (
+                  {reports.map((report, index) => (
                     <div 
                       key={report.id} 
                       className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow cursor-pointer"
@@ -168,22 +186,22 @@ const Profile = () => {
                             Skin Analysis #{index + 1}
                           </h3>
                           <p className="text-sm text-gray-600">
-                            {new Date(report.date).toLocaleDateString()}
+                            {new Date(report.createdAt).toLocaleDateString()}
                           </p>
                         </div>
                       </div>
 
                       <div className="space-y-2 text-sm">
                         <div>
-                          <span className="text-gray-600">Location:</span>
-                          <span className="ml-2 text-gray-800">{report.location}</span>
+                          <span className="text-gray-600">Condition:</span>
+                          <span className="ml-2 text-gray-800">{report.analysisResult.possibleConditions[0] || 'N/A'}</span>
                         </div>
-                        <div>
-                          <span className="text-gray-600">Symptoms:</span>
-                          <span className="ml-2 text-gray-800">
-                            {report.symptoms.length > 0 ? report.symptoms.join(', ') : 'None'}
-                          </span>
-                        </div>
+                        {report.analysisResult.confidence && (
+                          <div>
+                            <span className="text-gray-600">Confidence:</span>
+                            <span className="ml-2 text-gray-800">{report.analysisResult.confidence.toFixed(2)}%</span>
+                          </div>
+                        )}
                       </div>
 
                       <div className="flex justify-between items-center mt-4 pt-3 border-t border-gray-100">

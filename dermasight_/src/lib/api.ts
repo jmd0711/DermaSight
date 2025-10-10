@@ -80,7 +80,7 @@ class ApiClient {
       if (!tokenString) return null;
       
       const tokenData = JSON.parse(tokenString);
-      return tokenData.token || null;
+      return tokenData.user?.access || null;
     } catch {
       return null;
     }
@@ -93,9 +93,9 @@ class ApiClient {
   }
 
   // Authentication APIs
-  async login(credentials: LoginCredentials): Promise<ApiResponse<{ userId: string; username: string }>> {
+  async login(credentials: LoginCredentials): Promise<ApiResponse<{ userId: string; username: string; access: string; refresh: string }>> {
     try {
-      const response: AxiosResponse<{ message: string; userId: string; username: string }> = 
+      const response: AxiosResponse<{ message: string; userId: string; username: string; access: string; refresh: string }> = 
         await this.client.post('/login', credentials);
       
       return {
@@ -103,6 +103,8 @@ class ApiClient {
         data: {
           userId: response.data.userId,
           username: response.data.username,
+          access: response.data.access,
+          refresh: response.data.refresh
         },
         message: response.data.message,
         statusCode: response.status,
@@ -177,6 +179,53 @@ class ApiClient {
     }
   }
 
+  // // User API
+async getUserReports(): Promise<ApiResponse<{ reports: MedicalReport[] }>> {
+  try {
+    const response: AxiosResponse<{ reports: any[] }> = 
+      await this.client.get('/user/reports');
+    const tokenData = typeof window !== 'undefined'
+      ? JSON.parse(localStorage.getItem('token') || '{}')
+      : {};
+
+    const userId = tokenData.userId || null;
+    const normalizedReports: MedicalReport[] = response.data.reports.map((report) => ({
+      id: 'N/A',
+      userId: userId,
+      imageData: report.imageUrl,
+      questionnaireData: {
+        symptoms: [],
+        duration: 'N/A',
+        location: 'N/A',
+      },
+      analysisResult: {
+        id: 'N/A',
+        confidence: report.confidence || 0,
+        possibleConditions: report.skinCondition ? [report.skinCondition.replace(/^"|"$/g, '')] : [],
+        recommendations: report.treatment ? [report.treatment] : [],
+        severityLevel: 'medium',
+        requiresUrgentCare: false,
+        generatedAt: new Date(report.dateGenerated?.$date || new Date().toISOString())
+      },
+      createdAt: new Date(report.dateGenerated?.$date || new Date().toISOString()),
+      status: 'pending'
+    }));
+    console.log(normalizedReports)
+    return {
+      success: true,
+      data: { reports: normalizedReports },
+      message: 'Reports fetched successfully',
+      statusCode: response.status,
+    };
+  } catch (error: any) {
+    return {
+      success: false,
+      error: error.response?.data?.error || 'Failed to fetch reports',
+      statusCode: error.response?.status || 500,
+    };
+  }
+}
+
   // Chatbot API
   async sendChatMessage(message: string): Promise<ApiResponse<{ response: string }>> {
     try {
@@ -232,6 +281,10 @@ export const authApi = {
 
 export const uploadApi = {
   uploadImage: apiClient.uploadImage.bind(apiClient),
+};
+
+export const userApi = {
+  getReports: apiClient.getUserReports.bind(apiClient),
 };
 
 export const chatApi = {
