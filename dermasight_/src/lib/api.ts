@@ -234,7 +234,7 @@ async getUserReports(): Promise<ApiResponse<{ reports: MedicalReport[] }>> {
       const formData = { "msg": message }
 
       const response: AxiosResponse<string> = 
-        await this.chatbotClient.post('/ask', formData);
+        await this.client.post('/ask', formData);
 
       return {
         success: true,

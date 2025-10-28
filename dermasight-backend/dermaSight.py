@@ -15,7 +15,9 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from src.helper import download_hugging_face_embeddings
 from langchain_pinecone import PineconeVectorStore
 from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain.chains import create_retrieval_chain
+from langchain.chains import ConversationalRetrievalChain
+from langchain.memory import ConversationBufferMemory
+from langchain.chains import ConversationalRetrievalChain
 from langchain.chains.combine_documents import create_stuff_documents_chain
 from langchain_core.prompts import ChatPromptTemplate
 from dotenv import load_dotenv
@@ -25,8 +27,9 @@ from werkzeug.utils import secure_filename
 import tensorflow as tf
 import numpy as np, json, io, os
 from PIL import Image, UnidentifiedImageError
-import keras  # standalone Keras 3
-# at startup
+import keras 
+import traceback
+from typing import Optional, Tuple, Dict, Any
 from pillow_heif import register_heif_opener
 register_heif_opener()
 
@@ -47,6 +50,7 @@ app.config["JWT_REFRESH_TOKEN_EXPIRES"] = timedelta(days=7)
 jwt = JWTManager(app)
 mongo = PyMongo(app)
 CORS(app)
+user_memories: dict[str, ConversationBufferMemory] = {}
 
 # Connect to AWS S3
 AWS_ACCESS_KEY = os.getenv("AWS_ACCESS_KEY")
@@ -321,63 +325,199 @@ llm = ChatGoogleGenerativeAI(
     max_retries=2
 )
 
-prompt = ChatPromptTemplate.from_messages(
-    [
-        ("system", system_prompt),
-        ("human", "{input}"),
-    ]
+system_prompt = (
+    "You are a dermatology assistant. You must answer strictly from the retrieved "
+    "dermatology book documents and, when available, the user's latest skin report that is "
+    "stored in memory and describes what skin lesion user has. If a question is outside dermatology, refuse and redirect the user. "
+    "Be concise, medically responsible."
 )
 
-question_answer_chain = create_stuff_documents_chain(llm, prompt)
-rag_chain = create_retrieval_chain(retriever, question_answer_chain)
+# Prompt for ConversationalRetrievalChain
+combine_prompt = ChatPromptTemplate.from_messages([
+    ("system", "{system_prompt}"),
+    ("human",
+     "Use ONLY the provided context (dermatology sources and any saved user skin report details) "
+     "to answer the user's question about their skin problem indicated in the report.\n\n"
+     "Context:\n{context}\n\n"
+     "Question: {question}\n\n"
+     "Write your response as if speaking directly to the user — "
+     "avoid phrases like 'based on the provided text' or 'the context says'. "
+     "Integrate the information naturally, as though you already know it.")
+]).partial(system_prompt=system_prompt)
+
+assert set(combine_prompt.input_variables) == {"context", "question"}
+
+def get_or_create_memory(user_id: str) -> ConversationBufferMemory:
+    if user_id not in user_memories:
+        user_memories[user_id] = ConversationBufferMemory(
+            memory_key="chat_history",
+            return_messages=True,
+        )
+    return user_memories[user_id]
+
+def classify_question_with_gemini(msg: str) -> str:
+    """
+    Returns one of: 'dermatology', 'medical_non_dermatology', 'non_medical'
+    """
+    cls_prompt = (
+        "You are a medical domain classifier. Categorize the user's message into "
+        "one of three labels:\n"
+        "- 'dermatology': about skin, lesions, moles, rashes, acne, eczema, etc.\n"
+        "- 'medical_non_dermatology': other medical topics.\n"
+        "- 'non_medical': anything else.\n\n"
+        f"User message: \"{msg}\"\n"
+        "Respond with only the label: dermatology, medical_non_dermatology, or non_medical."
+    )
+    result = llm.invoke(cls_prompt)  # pass a plain string
+    label = (result.content or "").strip().lower()
+    if "dermatology" in label:
+        return "dermatology"
+    elif "medical" in label:
+        return "medical_non_dermatology"
+    else:
+        return "non_medical"
+
+def fetch_latest_report(uid: ObjectId) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
+    user = mongo.db.users.find_one({"_id": uid}, {"skinProblemReports": {"$slice": -1}})
+    if not user:
+        print("[fetch_latest_report] user not found")
+        return None, "user_not_found"
+
+    reports = user.get("skinProblemReports") or []
+    if reports:
+        print(f"[fetch_latest_report] got last report via $slice: -1 (count={len(reports)})")
+        return reports[0], None  # with $slice:-1 we get a list of 1 (the last)
+
+    # Fallback: get the whole array to be sure
+    user_all = mongo.db.users.find_one({"_id": uid}, {"skinProblemReports": 1})
+    if not user_all:
+        print("[fetch_latest_report] user missing on second lookup")
+        return None, "user_not_found"
+
+    all_reports = user_all.get("skinProblemReports") or []
+    if all_reports:
+        print(f"[fetch_latest_report] got reports via full fetch (count={len(all_reports)})")
+        last = all_reports[-1]
+        return last, None
+
+    print("[fetch_latest_report] no reports present")
+    return None, None
 
 @app.route("/ask", methods=["POST"])
 @jwt_required()
-def chat():
-    user_id = get_jwt_identity()
+def ask():
     try:
-        uid = ObjectId(user_id)
-    except Exception:
-        return jsonify({"error": "Invalid user ID"}), 401
+        identity = get_jwt_identity()
+        try:
+            uid = ObjectId(identity)
+        except InvalidId:
+            return jsonify({"error": "Invalid user ID"}), 401
 
-    data = request.get_json()
-    msg = data.get("msg")
-    if not msg:
-        return jsonify({"error": "No message provided"}), 400
+        data = request.get_json(silent=True) or {}
+        msg = (data.get("msg") or "").strip()
+        if not msg:
+            return jsonify({"error": "Missing 'msg' field"}), 400
 
-    # Fetch most recent report from user's skinProblemReports
-    user = mongo.db.users.find_one(
-        {"_id": uid},
-        {"skinProblemReports": {"$slice": -1}}  # only last report
-    )
+        # Ensure per-user memory
+        if identity not in user_memories:
+            user_memories[identity] = ConversationBufferMemory(
+                memory_key="chat_history",
+                return_messages=True
+            )
+        memory = user_memories[identity]
 
-    latest_report = None
-    if user and "skinProblemReports" in user and len(user["skinProblemReports"]) > 0:
-        latest_report = user["skinProblemReports"][0]
+        # Fetch latest report
+        latest_report, fetch_err = fetch_latest_report(uid)
+        if fetch_err == "user_not_found":
+            return jsonify({"error": "User not found"}), 404
 
-    # Inject context from latest report
-    if latest_report:
-        context_prompt = (
-            f"User has a skin lesion with the following details:\n"
-            f"- Location: {latest_report.get('location', 'unknown')}\n"
-            f"- Size: {latest_report.get('size', 'unknown')}\n"
-            f"- Duration: {latest_report.get('duration', 'unknown')}\n"
-            f"- Symptoms: {', '.join(latest_report.get('symptoms', [])) or 'none'}\n"
-            f"- Notes: {latest_report.get('additional', 'none')}\n"
-            f"- Predicted condition: {latest_report.get('skinCondition', 'N/A')} "
-            f"(confidence {latest_report.get('confidence', 'N/A')}%)\n\n"
-            f"Now the user says: {msg}"
+        # If no report, classify the query
+        if not latest_report:
+            topic = classify_question_with_gemini(msg)
+
+            if topic == "non_medical":
+                return jsonify({
+                    "answer": "I’m a dermatology AI assistant. Please ask about skin lesions or related skin conditions.",
+                    "report_used": None
+                }), 200
+
+            if topic == "medical_non_dermatology":
+                return jsonify({
+                    "answer": "I can only provide information about skin health and dermatology. "
+                              "For other medical topics, please consult a general healthcare provider.",
+                    "report_used": None
+                }), 200
+
+            # Dermatology topic → general advice
+            general_prompt = (
+                f"The user has no stored skin lesion report. They asked: '{msg}'.\n\n"
+                "Provide an accurate, concise dermatology answer. "
+                "If they describe a lesion or symptom, suggest uploading a photo for AI analysis."
+            )
+            response = llm.invoke(general_prompt)
+            memory.save_context({"input": msg}, {"output": response.content})
+
+            return jsonify({
+                "answer": response.content,
+                "report_used": None,
+                "chat_history": [
+                    {"role": m.type, "text": getattr(m, 'content', str(m))}
+                    for m in memory.chat_memory.messages
+                ]
+            }), 200
+
+        # Report exists → print it before answering
+        print("\n User's Latest Dermatology Report (loaded)")
+        print(f"Predicted Condition: {latest_report.get('skinCondition', 'N/A')}")
+        print(f"Confidence: {latest_report.get('confidence', 'N/A')}")
+        print(f"Treatment: {latest_report.get('treatment', 'N/A')}")
+        print(f"Location: {latest_report.get('location', 'unknown')}")
+        print(f"Size: {latest_report.get('size', 'unknown')}")
+        print(f"Duration: {latest_report.get('duration', 'unknown')}")
+        print(f"Symptoms: {', '.join(latest_report.get('symptoms', [])) or 'none'}")
+        print(f"Additional Notes: {latest_report.get('additional', 'none')}")
+        print("================================================\n")
+
+        # Save report into memory
+        symptoms = latest_report.get("symptoms") or []
+        memory.save_context(
+            {"input": "system"},
+            {"output": (
+                f"User dermatology report summary:\n"
+                f"- Predicted condition: {latest_report.get('skinCondition', 'N/A')} "
+                f"(confidence: {latest_report.get('confidence', 'N/A')})\n"
+                f"- Treatment: {latest_report.get('treatment', 'N/A')}\n"
+                f"- Location: {latest_report.get('location', 'unknown')}\n"
+                f"- Size: {latest_report.get('size', 'unknown')}\n"
+                f"- Duration: {latest_report.get('duration', 'unknown')}\n"
+                f"- Symptoms: {', '.join(symptoms) if symptoms else 'none'}\n"
+                f"- Notes: {latest_report.get('additional', 'none')}"
+            )}
         )
-    else:
-        context_prompt = f"User has no reports saved. The user says: {msg}"
 
-    response = rag_chain.invoke({"input": context_prompt})
+        # Conversational RAG
+        conversational_chain = ConversationalRetrievalChain.from_llm(
+            llm=llm,
+            retriever=retriever,
+            memory=memory,
+            combine_docs_chain_kwargs={"prompt": combine_prompt},
+            return_source_documents=False,
+        )
 
-    return jsonify({
-        "answer": response["answer"],
-        "report_used": latest_report
-    })
+        out = conversational_chain.invoke({"question": msg})
 
+        return jsonify({
+            "answer": out.get("answer", ""),
+            "report_used": latest_report,
+            "chat_history": [
+                {"role": m.type, "text": getattr(m, 'content', str(m))}
+                for m in memory.chat_memory.messages
+            ]
+        }), 200
+
+    except Exception as e:
+        print(traceback.format_exc())
+        return jsonify({"error": str(e)}), 500
 
 if __name__ == "__main__":
     app.run(debug=True)
