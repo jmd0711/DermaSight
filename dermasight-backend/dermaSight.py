@@ -237,10 +237,13 @@ def upload_report():
         image_url = upload_image_to_s3_bytes(img_bytes, file.filename, file.mimetype)
     except Exception as e:
         return jsonify({"error": f"S3 upload failed: {e.__class__.__name__}: {e}"}), 502
+    
+    docs = mongo.db.treatments.find({})
+    for doc in docs:
+        if doc["lesionType"].lower() in top["label"].lower():
+            condition = doc
+            break
 
-    condition = mongo.db.treatments.find_one(
-        { "lesionType": top["label"]}
-    )
     # Create report object
     report = {
         "imageUrl": image_url,
