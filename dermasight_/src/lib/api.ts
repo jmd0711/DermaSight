@@ -210,7 +210,8 @@ async getUserReports(): Promise<ApiResponse<{ reports: MedicalReport[] }>> {
       createdAt: new Date(report.dateGenerated?.$date || new Date().toISOString()),
       status: 'pending'
     }));
-    console.log(normalizedReports)
+    //console.log(normalizedReports)
+    localStorage.setItem('reports', JSON.stringify(normalizedReports));
     return {
       success: true,
       data: { reports: normalizedReports },

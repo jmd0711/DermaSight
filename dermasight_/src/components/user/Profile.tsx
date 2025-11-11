@@ -5,13 +5,13 @@ import { useRouter } from 'next/navigation';
 import useToken from '@/hooks/useToken';
 import { useUserReports } from '@/hooks/useApi';
 
-interface SavedReport {
-  id: string;
-  image: string;
-  location: string;
-  date: string;
-  symptoms: string[];
-}
+// interface SavedReport {
+//   id: string;
+//   image: string;
+//   location: string;
+//   date: string;
+//   symptoms: string[];
+// }
 
 const Profile = () => {
   const { token, isAuthenticated } = useToken();
@@ -52,6 +52,9 @@ const Profile = () => {
 
   const handleViewReport = (reportId: string) => {
     // In production, this would load the specific report
+    //console.log(reportId)
+    // TODO: handle report using ID, not index
+    localStorage.setItem('reportData', JSON.stringify(reports[Number(reportId)]))
     router.push(`/report`);
   };
 
@@ -174,8 +177,8 @@ const Profile = () => {
                   {reports.map((report, index) => (
                     <div 
                       key={report.id} 
-                      className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow cursor-pointer"
-                      onClick={() => handleViewReport(report.id)}
+                      className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow"
+                      //onClick={() => handleViewReport(report.id)}
                     >
                       <div className="flex items-center mb-3">
                         <div className="w-12 h-12 bg-gray-100 rounded-lg mr-3 flex items-center justify-center">
@@ -208,7 +211,8 @@ const Profile = () => {
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
-                            handleViewReport(report.id);
+                            //TODO: use report.id
+                            handleViewReport(index.toString());
                           }}
                           className="text-primary-custom hover:text-opacity-80 text-sm font-medium"
                         >
