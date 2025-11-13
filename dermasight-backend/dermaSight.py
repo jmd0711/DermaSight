@@ -246,8 +246,15 @@ def upload_report():
 
     # Create report object
     report = {
+        "_id": ObjectId(),
+        "report_id": str(ObjectId()),
         "imageUrl": image_url,
         "dateGenerated": datetime.utcnow(),
+        "location": location,
+        "size": size,
+        "duration": duration,
+        "symptoms": symptoms,
+        "additional": additional,
         "skinCondition": top["label"],
         "confidence": top["prob"],
         "treatment": condition["treatment"]
