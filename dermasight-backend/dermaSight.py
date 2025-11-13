@@ -270,9 +270,17 @@ def upload_report():
         return jsonify({"error": "User not found or report not saved"}), 404
 
     return jsonify({"message": "Report Uploaded", 
+                    "report_id": str(ObjectId()),
                     "imageUrl": image_url,
-                    "top": top,
-                    "top3": top3}), 200
+                    "dateGenerated": datetime.utcnow(),
+                    "location": location,
+                    "size": size,
+                    "duration": duration,
+                    "symptoms": symptoms,
+                    "additional": additional,
+                    "skinCondition": top["label"],
+                    "confidence": top["prob"],
+                    "treatment": condition["treatment"]}), 200
 
 # Get User reports
 @app.route("/user/reports", methods=["GET"])
