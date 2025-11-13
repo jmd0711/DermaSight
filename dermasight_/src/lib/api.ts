@@ -43,6 +43,33 @@ class ApiClient {
     this.setupInterceptors();
   }
 
+  private async refreshAccessToken(): Promise<string | null> {
+  try {
+    const tokenString = localStorage.getItem('token');
+    if (!tokenString) return null;
+
+    const tokenData = JSON.parse(tokenString);
+    const refreshToken = tokenData.refresh;
+    if (!refreshToken) return null;
+
+    const response = await axios.post(`${API_CONFIG.BASE_URL}/auth/refresh`, null, {
+      headers: { Authorization: `Bearer ${refreshToken}` },
+    });
+
+    const newAccess = response.data.access;
+    tokenData.access = newAccess;
+    localStorage.setItem('token', JSON.stringify(tokenData));
+    return newAccess;
+  } catch (error) {
+    console.error('Failed to refresh token', error);
+    this.removeTokenFromStorage();
+    if (typeof window !== 'undefined') {
+      window.location.href = '/login';
+    }
+    return null;
+  }
+}
+
   private setupInterceptors() {
     // Request interceptor to add auth token
     this.client.interceptors.request.use(
@@ -59,8 +86,16 @@ class ApiClient {
     // Response interceptor for error handling
     this.client.interceptors.response.use(
       (response) => response,
-      (error) => {
-        if (error.response?.status === 401) {
+      async (error) => {
+        const originalRequest = error.config;
+
+        if (error.response?.status === 401 && !originalRequest._retry) {
+          originalRequest._retry = true;
+          const newAccessToken = await this.refreshAccessToken();
+          if (newAccessToken) {
+            originalRequest.headers['Authorization'] = 'Bearer ${newAccessToken}';
+            return this.client(originalRequest)
+          }
           this.removeTokenFromStorage();
           // Redirect to login if needed
           if (typeof window !== 'undefined') {
