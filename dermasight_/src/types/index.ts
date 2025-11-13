@@ -55,40 +55,40 @@ export interface Area {
 }
 
 // Medical/Dermatology Types
-export interface Symptom {
-  id: string;
-  name: string;
-  description?: string;
-  severity?: 'mild' | 'moderate' | 'severe';
-}
+// export interface Symptom {
+//   id: string;
+//   name: string;
+//   description?: string;
+//   severity?: 'mild' | 'moderate' | 'severe';
+// }
 
 export interface QuestionnaireData {
-  symptoms: Symptom[];
+  symptoms: string[];
   duration: string;
   location: string;
+  size: string;
   additionalInfo?: string;
-  painLevel?: number; // 1-10 scale
-  itchiness?: number; // 1-10 scale
+  // painLevel?: number; // 1-10 scale
+  // itchiness?: number; // 1-10 scale
 }
 
 export interface AnalysisResult {
-  id: string;
+  // id: string;
   confidence: number;
   possibleConditions: string[];
   recommendations: string[];
-  severityLevel: 'low' | 'medium' | 'high';
-  requiresUrgentCare: boolean;
-  generatedAt: Date;
+  // severityLevel: 'low' | 'medium' | 'high';
+  // requiresUrgentCare: boolean;
+  // generatedAt: Date;
 }
 
 export interface MedicalReport {
   id: string;
-  userId: string;
-  imageData: CroppedImageData;
+//  userId: string;
+  imageUrl: string;
   questionnaireData: QuestionnaireData;
   analysisResult: AnalysisResult;
   createdAt: Date;
-  status: 'pending' | 'completed' | 'failed';
 }
 
 // Chatbot Types

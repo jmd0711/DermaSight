@@ -141,23 +141,38 @@ class ApiClient {
   // Image Upload API
   async uploadImage(
     imageFile: File,
-    userId: string,
-    skinCondition?: string,
-    recommendations?: string
-  ): Promise<ApiResponse<{ imageUrl: string }>> {
+    formDataPayload: {
+      location: string;
+      size: string;
+      duration: string;
+      symptoms: string[];
+      additional?: string;
+    }
+  ): Promise<ApiResponse<{ report: MedicalReport; }>> {
     try {
       const formData = new FormData();
-      formData.append('image', imageFile);
-      formData.append('userId', userId);
-      
-      if (skinCondition) {
-        formData.append('skinCondition', skinCondition);
-      }
-      if (recommendations) {
-        formData.append('recommendations', recommendations);
+      formData.append("image", imageFile);
+      formData.append("location", formDataPayload.location);
+      formData.append("size", formDataPayload.size);
+      formData.append("duration", formDataPayload.duration);
+      formDataPayload.symptoms.forEach((s) => formData.append("symptoms", s));
+      if (formDataPayload.additional) {
+        formData.append("additional", formDataPayload.additional);
       }
 
-      const response: AxiosResponse<{ message: string; imageUrl: string }> = 
+      const response: AxiosResponse<{ message: string; 
+        report_id: string;
+        imageUrl: string;
+        dateGenerated: any;
+        location: string;
+        size: string;
+        duration: string;
+        symptoms: string[];
+        additional?: string;
+        skinCondition: string;
+        confidence: string;
+        treatment: string;
+       }> = 
         await this.client.post('/upload', formData, {
           headers: {
             'Content-Type': 'multipart/form-data',
@@ -166,7 +181,29 @@ class ApiClient {
 
       return {
         success: true,
-        data: { imageUrl: response.data.imageUrl },
+        data: {
+          //imageUrl: response.imageUrl,
+          report: {
+            id: response.data.report_id,
+            //userId: userId,
+            imageUrl: response.data.imageUrl,
+            questionnaireData: {
+              symptoms: response.data.symptoms,
+              size: response.data.size,
+              duration: response.data.duration,
+              location: response.data.location,
+              additionalInfo: response.data.additional,
+            },
+            analysisResult: {
+              // id: 'N/A',
+              confidence: Number(response.data.confidence) || 0,
+              possibleConditions: response.data.skinCondition ? [response.data.skinCondition.replace(/^"|"$/g, '')] : [],
+              recommendations: response.data.treatment ? [response.data.treatment] : [],
+              //generatedAt: new Date(response.data.dateGenerated?.$date || new Date().toISOString())
+            },
+            createdAt: new Date(response.data.dateGenerated?.$date || new Date().toISOString()),
+          }
+        },
         message: response.data.message,
         statusCode: response.status,
       };
@@ -188,27 +225,26 @@ async getUserReports(): Promise<ApiResponse<{ reports: MedicalReport[] }>> {
       ? JSON.parse(localStorage.getItem('token') || '{}')
       : {};
 
-    const userId = tokenData.userId || null;
+    const userId = tokenData.user.id || null;
     const normalizedReports: MedicalReport[] = response.data.reports.map((report) => ({
-      id: 'N/A',
+      id: report.report_id,
       userId: userId,
-      imageData: report.imageUrl,
+      imageUrl: report.imageUrl,
       questionnaireData: {
-        symptoms: [],
-        duration: 'N/A',
-        location: 'N/A',
+        symptoms: report.symptoms,
+        size: report.size,
+        duration: report.duration,
+        location: report.location,
+        additionalInfo: report.additional,
       },
       analysisResult: {
         id: 'N/A',
         confidence: report.confidence || 0,
         possibleConditions: report.skinCondition ? [report.skinCondition.replace(/^"|"$/g, '')] : [],
         recommendations: report.treatment ? [report.treatment] : [],
-        severityLevel: 'medium',
-        requiresUrgentCare: false,
         generatedAt: new Date(report.dateGenerated?.$date || new Date().toISOString())
       },
       createdAt: new Date(report.dateGenerated?.$date || new Date().toISOString()),
-      status: 'pending'
     }));
     //console.log(normalizedReports)
     localStorage.setItem('reports', JSON.stringify(normalizedReports));
@@ -222,6 +258,24 @@ async getUserReports(): Promise<ApiResponse<{ reports: MedicalReport[] }>> {
     return {
       success: false,
       error: error.response?.data?.error || 'Failed to fetch reports',
+      statusCode: error.response?.status || 500,
+    };
+  }
+}
+
+async deleteUserReport(reportId: string): Promise<ApiResponse<null>> {
+  try {
+    const res = await this.client.delete(`/user/reports/${reportId}`);
+    return {
+      success: true,
+      data: null,
+      message: res.data.message || 'Report deleted successfully',
+      statusCode: res.status,
+    };
+  } catch (error: any) {
+    return {
+      success: false,
+      error: error.response?.data?.error || 'Failed to delete report',
       statusCode: error.response?.status || 500,
     };
   }
@@ -286,6 +340,7 @@ export const uploadApi = {
 
 export const userApi = {
   getReports: apiClient.getUserReports.bind(apiClient),
+  deleteReport: apiClient.deleteUserReport.bind(apiClient),
 };
 
 export const chatApi = {

@@ -1,35 +1,38 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useUpload, useUserReports } from '@/hooks/useApi';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
+import { MedicalReport } from '@/types';
 
-interface ReportData {
-  id: string;
-  userId: string | null;
-  imageData: string;
-  questionnaireData: {
-    location: string;
-    size: string;
-    duration: string;
-    symptoms: string[];
-    additional: string;
-  };
-  analysisResult: {
-    id: string;
-    confidence: number;
-    possibleConditions: string[];
-    recommendations: string[];
-    severityLevel: string;
-    requiresUrgentCare: boolean;
-    generatedAt: string;
-  };
-  createdAt: string;
-  status: string;
-}
+// interface ReportData {
+//   id: string;
+//   userId: string | null;
+//   imageData: string;
+//   questionnaireData: {
+//     location: string;
+//     size: string;
+//     duration: string;
+//     symptoms: string[];
+//     additional: string;
+//   };
+//   analysisResult: {
+//     id: string;
+//     confidence: number;
+//     possibleConditions: string[];
+//     recommendations: string[];
+//     // severityLevel: string;
+//     // requiresUrgentCare: boolean;
+//     generatedAt: string;
+//   };
+//   createdAt: string;
+//   // status: string;
+// }
 
 const Report = () => {
-  const [data, setData] = useState<ReportData | null>(null);
+  const [data, setData] = useState<MedicalReport | null>(null);
+    const { deleteReport, deleting, error } = useUserReports();
   const router = useRouter();
 
   useEffect(() => {
@@ -42,12 +45,13 @@ const Report = () => {
   }, [router]);
 
   const onDelete = () => {
+    if (data) deleteReport(data.id)
     localStorage.removeItem('reportData');
-    router.push('/upload');
+    router.push('/profile');
   };
 
   const onSave = () => {
-    router.push('/profile');
+    router.push('/chatbot');
   };
 
   const onShare = () => {
@@ -86,7 +90,7 @@ const Report = () => {
                 </h2>
                 <div className="relative mx-auto w-48 h-48 sm:w-64 sm:h-64">
                   <Image
-                    src={data.imageData}
+                    src={data.imageUrl}
                     alt="Analyzed skin condition"
                     fill
                     className="object-cover rounded-xl shadow-md"
@@ -114,11 +118,11 @@ const Report = () => {
                     {data.questionnaireData.symptoms.length > 0 ? data.questionnaireData.symptoms.join(", ") : "None reported"}
                   </span>
                 </div>
-                {data.questionnaireData.additional && (
+                {data.questionnaireData.additionalInfo && (
                   <div>
                     <span className="font-semibold text-gray-700">Additional Info:</span>
                     <p className="mt-2 text-gray-600 text-sm bg-white p-3 rounded-lg">
-                      {data.questionnaireData.additional}
+                      {data.questionnaireData.additionalInfo}
                     </p>
                   </div>
                 )}
@@ -193,12 +197,12 @@ const Report = () => {
                       Important: This report does not replace professional medical advice
                     </p>
                   </div>
-                  <p className="text-gray-600 mb-2">Your condition's severity is classified as {data.analysisResult.severityLevel}.</p>
+                  {/* <p className="text-gray-600 mb-2">Your condition's severity is classified as {data.analysisResult.severityLevel}.</p>
                   {data.analysisResult.requiresUrgentCare ? (
                     <p className="text-gray-700 font-medium mb-2">Urgent care is required.</p>
                   ) : (
                     <p className="text-gray-700 font-medium mb-2">Urgent care is currently not required.</p>
-                  )}
+                  )} */}
                   <p className="text-gray-600 mb-2">Seek medical attention if:</p>
                   <ul className="list-disc list-inside text-gray-600 space-y-1">
                     <li>The condition worsens or doesn't improve</li>
@@ -224,12 +228,12 @@ const Report = () => {
                   >
                     📤 Share
                   </button>
-                  <button
+                  {/* <button
                     onClick={onSave}
                     className="px-6 py-3 bg-primary-custom hover:bg-opacity-90 text-white rounded-lg font-medium transition-colors"
                   >
                     💾 Save to Profile
-                  </button>
+                  </button> */}
                 </div>
               </div>
             </div>

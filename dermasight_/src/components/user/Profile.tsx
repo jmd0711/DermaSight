@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import useToken from '@/hooks/useToken';
 import { useUserReports } from '@/hooks/useApi';
+import { MedicalReport } from '@/types';
 
 // interface SavedReport {
 //   id: string;
@@ -15,8 +16,8 @@ import { useUserReports } from '@/hooks/useApi';
 
 const Profile = () => {
   const { token, isAuthenticated } = useToken();
-  //const [savedReports, setSavedReports] = useState<SavedReport[]>([]);
-  const { reports, isLoading: isLoadingReports, error } = useUserReports();
+  const [savedReports, setSavedReports] = useState<MedicalReport[]>([]);
+  const { reports, isLoading: isLoadingReports, deleteReport, deleting, error } = useUserReports();
   const router = useRouter();
 
   useEffect(() => {
@@ -24,45 +25,37 @@ const Profile = () => {
       router.push('/login');
       return;
     }
-
-    // Load saved reports from localStorage (in production, this would come from API)
-    //const reports = localStorage.getItem('savedReports');
-    // if (reports) {
-    //   setSavedReports(JSON.parse(reports));
-    // } else {
-    //   // Demo data for now
-    //   setSavedReports([
-    //     {
-    //       id: '1',
-    //       image: '/placeholder-skin.jpg',
-    //       location: 'Face',
-    //       date: '2024-01-15',
-    //       symptoms: ['Itching', 'Redness']
-    //     },
-    //     {
-    //       id: '2', 
-    //       image: '/placeholder-skin.jpg',
-    //       location: 'Arm',
-    //       date: '2024-01-10',
-    //       symptoms: ['Pain', 'Swelling']
-    //     }
-    //   ]);
-    // }
   }, [isAuthenticated, router]);
 
-  const handleViewReport = (reportId: string) => {
+  useEffect(() => {
+  if (reports) {
+    setSavedReports(reports);
+  }
+}, [reports]);
+
+  const handleViewReport = (index: number) => {
     // In production, this would load the specific report
     //console.log(reportId)
     // TODO: handle report using ID, not index
-    localStorage.setItem('reportData', JSON.stringify(reports[Number(reportId)]))
+    localStorage.setItem('reportData', JSON.stringify(reports[index]))
     router.push(`/report`);
   };
 
-  const handleDeleteReport = (reportId: string) => {
+  const handleDeleteReport = (reportId: string, index: number) => {
     // setSavedReports(prev => prev.filter(report => report.id !== reportId));
     // // Update localStorage
     // const updatedReports = savedReports.filter(report => report.id !== reportId);
     // localStorage.setItem('savedReports', JSON.stringify(updatedReports));
+    deleteReport(reportId)
+    const storedReports = localStorage.getItem('reports');
+    if (!storedReports) return;
+
+    const updatedReports = JSON.parse(storedReports);
+    updatedReports.splice(index, 1);
+    localStorage.setItem('reports', JSON.stringify(updatedReports));
+
+    // (Optional) Step 5: Update your local state so UI updates immediately
+    setSavedReports(updatedReports);
   };
 
   if (!isAuthenticated) {
@@ -154,7 +147,7 @@ const Profile = () => {
                 </span>
               </div>
 
-              {reports.length === 0 ? (
+              {savedReports.length === 0 ? (
                 <div className="text-center py-12">
                   <div className="w-16 h-16 bg-gray-100 rounded-full mx-auto mb-4 flex items-center justify-center">
                     <span className="text-2xl">📄</span>
@@ -174,7 +167,7 @@ const Profile = () => {
                 </div>
               ) : (
                 <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {reports.map((report, index) => (
+                  {savedReports.map((report, index) => (
                     <div 
                       key={report.id} 
                       className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow"
@@ -211,8 +204,7 @@ const Profile = () => {
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
-                            //TODO: use report.id
-                            handleViewReport(index.toString());
+                            handleViewReport(index);
                           }}
                           className="text-primary-custom hover:text-opacity-80 text-sm font-medium"
                         >
@@ -221,7 +213,7 @@ const Profile = () => {
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
-                            handleDeleteReport(report.id);
+                            handleDeleteReport(report.id, index);
                           }}
                           className="text-red-500 hover:text-red-600 text-sm"
                         >
