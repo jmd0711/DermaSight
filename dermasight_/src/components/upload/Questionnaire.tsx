@@ -91,7 +91,7 @@ const Questionnaire = ({ croppedImage, setData }: QuestionnaireProps) => {
         // };
         localStorage.setItem('reportData', JSON.stringify(response.data?.report));
         // setData(reportData.questionnaireData);
-        router.push('/report');
+        router.push('/chatbot');
       } else {
         alert(`Upload failed: ${response.error}`);
       }
