@@ -50,7 +50,7 @@ const Report = () => {
     router.push('/profile');
   };
 
-  const onSave = () => {
+  const onChatbot = () => {
     router.push('/chatbot');
   };
 
@@ -228,12 +228,12 @@ const Report = () => {
                   >
                     📤 Share
                   </button>
-                  {/* <button
-                    onClick={onSave}
+                  <button
+                    onClick={onChatbot}
                     className="px-6 py-3 bg-primary-custom hover:bg-opacity-90 text-white rounded-lg font-medium transition-colors"
                   >
-                    💾 Save to Profile
-                  </button> */}
+                    🤖 AI Assistant
+                  </button>
                 </div>
               </div>
             </div>

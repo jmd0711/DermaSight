@@ -60,7 +60,7 @@ const Questionnaire = ({ croppedImage, setData }: QuestionnaireProps) => {
     try {
       // Convert the base64/cropped image to a File object if needed
       const blob = await fetch(croppedImage).then(res => res.blob());
-      const file = new File([blob], "lesion3.png", { type: blob.type });
+      const file = new File([blob], croppedImage, { type: blob.type });
       const payload = {
         location,
         size,
@@ -91,7 +91,7 @@ const Questionnaire = ({ croppedImage, setData }: QuestionnaireProps) => {
         // };
         localStorage.setItem('reportData', JSON.stringify(response.data?.report));
         // setData(reportData.questionnaireData);
-        router.push('/chatbot');
+        router.push('/report');
       } else {
         alert(`Upload failed: ${response.error}`);
       }
