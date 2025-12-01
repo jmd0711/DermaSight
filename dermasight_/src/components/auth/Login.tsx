@@ -35,6 +35,8 @@ const Login = ({ setToken }: AuthComponentProps) => {
         user: {
           id: response.data.userId,
           username: response.data.username,
+          access: response.data.access,
+          refresh: response.data.refresh,
         },
       };
       

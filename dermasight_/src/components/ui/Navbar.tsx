@@ -10,6 +10,8 @@ const NavBar = () => {
   const router = useRouter();
 
   const handleLogout = () => {
+    localStorage.removeItem("reportData")
+    localStorage.removeItem("reports")
     removeToken();
     router.push('/');
     router.refresh();

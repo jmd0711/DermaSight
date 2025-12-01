@@ -4,6 +4,7 @@ import { useState, FormEvent } from 'react';
 import { Button, Form, Container, Row, Col } from 'react-bootstrap';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
+import { useUpload } from '@/hooks/useApi';
 
 interface QuestionnaireProps {
   croppedImage: string;
@@ -32,6 +33,7 @@ const Questionnaire = ({ croppedImage, setData }: QuestionnaireProps) => {
   const [additional, setAdditional] = useState("");
   
   const router = useRouter();
+  const { uploadImage, isLoading, error } = useUpload();
 
   const handleSymptomsChange = (position: number) => {
     const updatedSymptoms = symptoms.map((item, index) => 
@@ -40,30 +42,66 @@ const Questionnaire = ({ croppedImage, setData }: QuestionnaireProps) => {
     setSymptoms(updatedSymptoms);
   };
 
-  const handleSubmit = (e: FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    
-    const dataSymptoms: string[] = [];
-    symptoms.forEach((item, index) => {
-      if (item) {
-        dataSymptoms.push(SYMPTOMS_A[index]);
+
+    const selectedSymptoms = SYMPTOMS_A.filter((_, i) => symptoms[i]);
+
+    // const questionnaireData: QuestionnaireData = {
+    //   image: croppedImage,
+    //   location,
+    //   size,
+    //   duration,
+    //   symptoms: dataSymptoms,
+    //   additional,
+    // };
+
+    // setData(questionnaireData);
+    try {
+      // Convert the base64/cropped image to a File object if needed
+      const blob = await fetch(croppedImage).then(res => res.blob());
+      const file = new File([blob], croppedImage, { type: blob.type });
+      const payload = {
+        location,
+        size,
+        duration,
+        symptoms: selectedSymptoms,
+        additional,
+      };
+      const response = await uploadImage(file, payload);
+
+      if (response.success) {
+        //console.log(response)
+        // const reportData = {
+        //   id: 'N/A',
+        //   userId: 'user-id-placeholder', // replace with actual userId
+        //   imageData: response.data.imageUrl,
+        //   questionnaireData: payload,
+        //   analysisResult: {
+        //     confidence: response.data.top.prob || 0,
+        //     possibleConditions: response.data.top3.map((item: any) => item.label),
+        //     recommendations: response.data.top3.map((item: any) => item.recommendation || 'N/A'),
+        //     severityLevel: 'medium', // or from backend if available
+        //     requiresUrgentCare: false, // or from backend
+        //     id: response.data.top.id || 'N/A',
+        //     generatedAt: new Date().toISOString(),
+        //   },
+        //   createdAt: new Date().toISOString(),
+        //   status: 'pending',
+        // };
+        localStorage.setItem('reportData', JSON.stringify(response.data?.report));
+        // setData(reportData.questionnaireData);
+        router.push('/report');
+      } else {
+        alert(`Upload failed: ${response.error}`);
       }
-    });
-
-    const questionnaireData: QuestionnaireData = {
-      image: croppedImage,
-      location,
-      size,
-      duration,
-      symptoms: dataSymptoms,
-      additional,
-    };
-
-    setData(questionnaireData);
-    
+    } catch (err) {
+      console.error(err);
+      alert('An error occurred during upload');
+    }
     // Navigate to report page
-    localStorage.setItem('reportData', JSON.stringify(questionnaireData));
-    router.push('/report');
+    // localStorage.setItem('reportData', JSON.stringify(questionnaireData));
+    // router.push('/report');
   };
 
   return (

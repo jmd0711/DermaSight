@@ -1,20 +1,38 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useUpload, useUserReports } from '@/hooks/useApi';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
+import { MedicalReport } from '@/types';
 
-interface ReportData {
-  image: string;
-  location: string;
-  size: string;
-  duration: string;
-  symptoms: string[];
-  additional: string;
-}
+// interface ReportData {
+//   id: string;
+//   userId: string | null;
+//   imageData: string;
+//   questionnaireData: {
+//     location: string;
+//     size: string;
+//     duration: string;
+//     symptoms: string[];
+//     additional: string;
+//   };
+//   analysisResult: {
+//     id: string;
+//     confidence: number;
+//     possibleConditions: string[];
+//     recommendations: string[];
+//     // severityLevel: string;
+//     // requiresUrgentCare: boolean;
+//     generatedAt: string;
+//   };
+//   createdAt: string;
+//   // status: string;
+// }
 
 const Report = () => {
-  const [data, setData] = useState<ReportData | null>(null);
+  const [data, setData] = useState<MedicalReport | null>(null);
+    const { deleteReport, deleting, error } = useUserReports();
   const router = useRouter();
 
   useEffect(() => {
@@ -27,12 +45,13 @@ const Report = () => {
   }, [router]);
 
   const onDelete = () => {
+    if (data) deleteReport(data.id)
     localStorage.removeItem('reportData');
-    router.push('/upload');
+    router.push('/profile');
   };
 
-  const onSave = () => {
-    router.push('/profile');
+  const onChatbot = () => {
+    router.push('/chatbot');
   };
 
   const onShare = () => {
@@ -71,7 +90,7 @@ const Report = () => {
                 </h2>
                 <div className="relative mx-auto w-48 h-48 sm:w-64 sm:h-64">
                   <Image
-                    src={data.image}
+                    src={data.imageUrl}
                     alt="Analyzed skin condition"
                     fill
                     className="object-cover rounded-xl shadow-md"
@@ -83,27 +102,27 @@ const Report = () => {
               <div className="space-y-4">
                 <div>
                   <span className="font-semibold text-gray-700">Location:</span>
-                  <span className="ml-2 text-gray-600">{data.location}</span>
+                  <span className="ml-2 text-gray-600">{data.questionnaireData.location}</span>
                 </div>
                 <div>
                   <span className="font-semibold text-gray-700">Size:</span>
-                  <span className="ml-2 text-gray-600">{data.size}</span>
+                  <span className="ml-2 text-gray-600">{data.questionnaireData.size}</span>
                 </div>
                 <div>
                   <span className="font-semibold text-gray-700">Duration:</span>
-                  <span className="ml-2 text-gray-600">{data.duration}</span>
+                  <span className="ml-2 text-gray-600">{data.questionnaireData.duration}</span>
                 </div>
                 <div>
                   <span className="font-semibold text-gray-700">Symptoms:</span>
                   <span className="ml-2 text-gray-600">
-                    {data.symptoms.length > 0 ? data.symptoms.join(", ") : "None reported"}
+                    {data.questionnaireData.symptoms.length > 0 ? data.questionnaireData.symptoms.join(", ") : "None reported"}
                   </span>
                 </div>
-                {data.additional && (
+                {data.questionnaireData.additionalInfo && (
                   <div>
                     <span className="font-semibold text-gray-700">Additional Info:</span>
                     <p className="mt-2 text-gray-600 text-sm bg-white p-3 rounded-lg">
-                      {data.additional}
+                      {data.questionnaireData.additionalInfo}
                     </p>
                   </div>
                 )}
@@ -124,14 +143,16 @@ const Report = () => {
                       AI-generated analysis of the skin condition.
                     </p>
                   </div>
-                  <p className="text-gray-600">
-                    Based on the location ({data.location}) and reported symptoms, 
-                    detailed characteristics would be analyzed here.
-                  </p>
+                  <p className="text-gray-600 mb-3">The AI system’s assessment gives your condition a {data.analysisResult.confidence}% confidence score that it is the following condition(s):</p>
+                  <ul className="list-disc list-inside text-gray-600 space-y-1">
+                    {data.analysisResult.possibleConditions.map((condition, index) => (
+                    <li>{condition}</li>
+                    ))}
+                  </ul>
                 </div>
 
                 {/* Common Causes */}
-                <div className="border-l-4 border-yellow-500 pl-4">
+                {/* <div className="border-l-4 border-yellow-500 pl-4">
                   <h3 className="text-lg font-semibold text-gray-800 mb-3">
                     🔍 Common Causes
                   </h3>
@@ -146,7 +167,7 @@ const Report = () => {
                     <li>Genetic predisposition</li>
                     <li>Other medical conditions</li>
                   </ul>
-                </div>
+                </div> */}
 
                 {/* Treatments */}
                 <div className="border-l-4 border-green-500 pl-4">
@@ -160,9 +181,9 @@ const Report = () => {
                   </div>
                   <p className="text-gray-600 mb-3">Common approaches may include:</p>
                   <ul className="list-disc list-inside text-gray-600 space-y-1">
-                    <li>Topical medications</li>
-                    <li>Lifestyle modifications</li>
-                    <li>Professional medical treatments</li>
+                    {data.analysisResult.recommendations.map((recommendation, index) => (
+                    <li className="pl-[1em] indent-[-1em]">{recommendation}</li>
+                    ))}
                   </ul>
                 </div>
 
@@ -176,7 +197,13 @@ const Report = () => {
                       Important: This report does not replace professional medical advice
                     </p>
                   </div>
-                  <p className="text-gray-700 font-medium mb-2">Seek medical attention if:</p>
+                  {/* <p className="text-gray-600 mb-2">Your condition's severity is classified as {data.analysisResult.severityLevel}.</p>
+                  {data.analysisResult.requiresUrgentCare ? (
+                    <p className="text-gray-700 font-medium mb-2">Urgent care is required.</p>
+                  ) : (
+                    <p className="text-gray-700 font-medium mb-2">Urgent care is currently not required.</p>
+                  )} */}
+                  <p className="text-gray-600 mb-2">Seek medical attention if:</p>
                   <ul className="list-disc list-inside text-gray-600 space-y-1">
                     <li>The condition worsens or doesn't improve</li>
                     <li>You experience severe symptoms</li>
@@ -202,10 +229,10 @@ const Report = () => {
                     📤 Share
                   </button>
                   <button
-                    onClick={onSave}
+                    onClick={onChatbot}
                     className="px-6 py-3 bg-primary-custom hover:bg-opacity-90 text-white rounded-lg font-medium transition-colors"
                   >
-                    💾 Save to Profile
+                    🤖 AI Assistant
                   </button>
                 </div>
               </div>

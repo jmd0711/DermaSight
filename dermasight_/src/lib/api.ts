@@ -43,6 +43,33 @@ class ApiClient {
     this.setupInterceptors();
   }
 
+  private async refreshAccessToken(): Promise<string | null> {
+  try {
+    const tokenString = localStorage.getItem('token');
+    if (!tokenString) return null;
+
+    const tokenData = JSON.parse(tokenString);
+    const refreshToken = tokenData.refresh;
+    if (!refreshToken) return null;
+
+    const response = await axios.post(`${API_CONFIG.BASE_URL}/auth/refresh`, null, {
+      headers: { Authorization: `Bearer ${refreshToken}` },
+    });
+
+    const newAccess = response.data.access;
+    tokenData.access = newAccess;
+    localStorage.setItem('token', JSON.stringify(tokenData));
+    return newAccess;
+  } catch (error) {
+    console.error('Failed to refresh token', error);
+    this.removeTokenFromStorage();
+    if (typeof window !== 'undefined') {
+      window.location.href = '/login';
+    }
+    return null;
+  }
+}
+
   private setupInterceptors() {
     // Request interceptor to add auth token
     this.client.interceptors.request.use(
@@ -59,8 +86,16 @@ class ApiClient {
     // Response interceptor for error handling
     this.client.interceptors.response.use(
       (response) => response,
-      (error) => {
-        if (error.response?.status === 401) {
+      async (error) => {
+        const originalRequest = error.config;
+
+        if (error.response?.status === 401 && !originalRequest._retry) {
+          originalRequest._retry = true;
+          const newAccessToken = await this.refreshAccessToken();
+          if (newAccessToken) {
+            originalRequest.headers['Authorization'] = 'Bearer ${newAccessToken}';
+            return this.client(originalRequest)
+          }
           this.removeTokenFromStorage();
           // Redirect to login if needed
           if (typeof window !== 'undefined') {
@@ -80,7 +115,7 @@ class ApiClient {
       if (!tokenString) return null;
       
       const tokenData = JSON.parse(tokenString);
-      return tokenData.token || null;
+      return tokenData.user?.access || null;
     } catch {
       return null;
     }
@@ -93,9 +128,9 @@ class ApiClient {
   }
 
   // Authentication APIs
-  async login(credentials: LoginCredentials): Promise<ApiResponse<{ userId: string; username: string }>> {
+  async login(credentials: LoginCredentials): Promise<ApiResponse<{ userId: string; username: string; access: string; refresh: string }>> {
     try {
-      const response: AxiosResponse<{ message: string; userId: string; username: string }> = 
+      const response: AxiosResponse<{ message: string; userId: string; username: string; access: string; refresh: string }> = 
         await this.client.post('/login', credentials);
       
       return {
@@ -103,6 +138,8 @@ class ApiClient {
         data: {
           userId: response.data.userId,
           username: response.data.username,
+          access: response.data.access,
+          refresh: response.data.refresh
         },
         message: response.data.message,
         statusCode: response.status,
@@ -139,23 +176,38 @@ class ApiClient {
   // Image Upload API
   async uploadImage(
     imageFile: File,
-    userId: string,
-    skinCondition?: string,
-    recommendations?: string
-  ): Promise<ApiResponse<{ imageUrl: string }>> {
+    formDataPayload: {
+      location: string;
+      size: string;
+      duration: string;
+      symptoms: string[];
+      additional?: string;
+    }
+  ): Promise<ApiResponse<{ report: MedicalReport; }>> {
     try {
       const formData = new FormData();
-      formData.append('image', imageFile);
-      formData.append('userId', userId);
-      
-      if (skinCondition) {
-        formData.append('skinCondition', skinCondition);
-      }
-      if (recommendations) {
-        formData.append('recommendations', recommendations);
+      formData.append("image", imageFile);
+      formData.append("location", formDataPayload.location);
+      formData.append("size", formDataPayload.size);
+      formData.append("duration", formDataPayload.duration);
+      formDataPayload.symptoms.forEach((s) => formData.append("symptoms", s));
+      if (formDataPayload.additional) {
+        formData.append("additional", formDataPayload.additional);
       }
 
-      const response: AxiosResponse<{ message: string; imageUrl: string }> = 
+      const response: AxiosResponse<{ message: string; 
+        report_id: string;
+        imageUrl: string;
+        dateGenerated: any;
+        location: string;
+        size: string;
+        duration: string;
+        symptoms: string[];
+        additional?: string;
+        skinCondition: string;
+        confidence: string;
+        treatment: string;
+       }> = 
         await this.client.post('/upload', formData, {
           headers: {
             'Content-Type': 'multipart/form-data',
@@ -164,7 +216,29 @@ class ApiClient {
 
       return {
         success: true,
-        data: { imageUrl: response.data.imageUrl },
+        data: {
+          //imageUrl: response.imageUrl,
+          report: {
+            id: response.data.report_id,
+            //userId: userId,
+            imageUrl: response.data.imageUrl,
+            questionnaireData: {
+              symptoms: response.data.symptoms,
+              size: response.data.size,
+              duration: response.data.duration,
+              location: response.data.location,
+              additionalInfo: response.data.additional,
+            },
+            analysisResult: {
+              // id: 'N/A',
+              confidence: Number(response.data.confidence) || 0,
+              possibleConditions: response.data.skinCondition ? [response.data.skinCondition.replace(/^"|"$/g, '')] : [],
+              recommendations: response.data.treatment ? [response.data.treatment] : [],
+              //generatedAt: new Date(response.data.dateGenerated?.$date || new Date().toISOString())
+            },
+            createdAt: new Date(response.data.dateGenerated?.$date || new Date().toISOString()),
+          }
+        },
         message: response.data.message,
         statusCode: response.status,
       };
@@ -177,6 +251,71 @@ class ApiClient {
     }
   }
 
+  // // User API
+async getUserReports(): Promise<ApiResponse<{ reports: MedicalReport[] }>> {
+  try {
+    const response: AxiosResponse<{ reports: any[] }> = 
+      await this.client.get('/user/reports');
+    const tokenData = typeof window !== 'undefined'
+      ? JSON.parse(localStorage.getItem('token') || '{}')
+      : {};
+
+    const userId = tokenData.user.id || null;
+    const normalizedReports: MedicalReport[] = response.data.reports.map((report) => ({
+      id: report.report_id,
+      userId: userId,
+      imageUrl: report.imageUrl,
+      questionnaireData: {
+        symptoms: report.symptoms,
+        size: report.size,
+        duration: report.duration,
+        location: report.location,
+        additionalInfo: report.additional,
+      },
+      analysisResult: {
+        id: 'N/A',
+        confidence: report.confidence || 0,
+        possibleConditions: report.skinCondition ? [report.skinCondition.replace(/^"|"$/g, '')] : [],
+        recommendations: report.treatment ? [report.treatment] : [],
+        generatedAt: new Date(report.dateGenerated?.$date || new Date().toISOString())
+      },
+      createdAt: new Date(report.dateGenerated?.$date || new Date().toISOString()),
+    }));
+    //console.log(normalizedReports)
+    localStorage.setItem('reports', JSON.stringify(normalizedReports));
+    return {
+      success: true,
+      data: { reports: normalizedReports },
+      message: 'Reports fetched successfully',
+      statusCode: response.status,
+    };
+  } catch (error: any) {
+    return {
+      success: false,
+      error: error.response?.data?.error || 'Failed to fetch reports',
+      statusCode: error.response?.status || 500,
+    };
+  }
+}
+
+async deleteUserReport(reportId: string): Promise<ApiResponse<null>> {
+  try {
+    const res = await this.client.delete(`/user/reports/${reportId}`);
+    return {
+      success: true,
+      data: null,
+      message: res.data.message || 'Report deleted successfully',
+      statusCode: res.status,
+    };
+  } catch (error: any) {
+    return {
+      success: false,
+      error: error.response?.data?.error || 'Failed to delete report',
+      statusCode: error.response?.status || 500,
+    };
+  }
+}
+
   // Chatbot API
   async sendChatMessage(message: string): Promise<ApiResponse<{ response: string }>> {
     try {
@@ -185,7 +324,7 @@ class ApiClient {
       const formData = { "msg": message }
 
       const response: AxiosResponse<string> = 
-        await this.chatbotClient.post('/ask', formData);
+        await this.client.post('/ask', formData);
 
       return {
         success: true,
@@ -232,6 +371,11 @@ export const authApi = {
 
 export const uploadApi = {
   uploadImage: apiClient.uploadImage.bind(apiClient),
+};
+
+export const userApi = {
+  getReports: apiClient.getUserReports.bind(apiClient),
+  deleteReport: apiClient.deleteUserReport.bind(apiClient),
 };
 
 export const chatApi = {
