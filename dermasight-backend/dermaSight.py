@@ -244,10 +244,12 @@ def upload_report():
             condition = doc
             break
 
+    id = ObjectId()
+
     # Create report object
     report = {
-        "_id": ObjectId(),
-        "report_id": str(ObjectId()),
+        "_id": id,
+        "report_id": str(id),
         "imageUrl": image_url,
         "dateGenerated": datetime.utcnow(),
         "location": location,
@@ -270,7 +272,7 @@ def upload_report():
         return jsonify({"error": "User not found or report not saved"}), 404
 
     return jsonify({"message": "Report Uploaded", 
-                    "report_id": str(ObjectId()),
+                    "report_id": str(id),
                     "imageUrl": image_url,
                     "dateGenerated": datetime.utcnow(),
                     "location": location,
@@ -310,7 +312,7 @@ def delete_report(report_id):
 
     result = mongo.db.users.update_one(
         {"_id": uid},
-        {"$pull": {"skinProblemReports": {"_id": ObjectId(report_id)}}}
+        {"$pull": {"skinProblemReports": {"report_id": report_id}}}
     )
 
     if result.modified_count == 0:
