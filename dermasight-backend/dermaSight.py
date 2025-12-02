@@ -329,7 +329,6 @@ os.environ["GOOGLE_API_KEY"] = GOOGLE_API_KEY
 
 embeddings = download_hugging_face_embeddings()
 index_name = "medicalbot"
-# Embed each chunk and upsert the embeddings into your Pinecone index.
 docsearch = PineconeVectorStore.from_existing_index(
     index_name=index_name,
     embedding=embeddings
@@ -356,13 +355,13 @@ system_prompt = (
 combine_prompt = ChatPromptTemplate.from_messages([
     ("system", "{system_prompt}"),
     ("human",
-     "Use ONLY the provided context (dermatology sources and any saved user skin report details) "
-     "to answer the user's question about their skin problem indicated in the report.\n\n"
-     "Context:\n{context}\n\n"
-     "Question: {question}\n\n"
-     "Write your response as if speaking directly to the user — "
-     "avoid phrases like 'based on the provided text' or 'the context says'. "
-     "Integrate the information naturally, as though you already know it.")
+        "Use ONLY the provided context (dermatology sources and any saved user skin report details) "
+        "to answer the user's question about their skin problem indicated in the report.\n\n"
+        "Context:\n{context}\n\n"
+        "Question: {question}\n\n"
+        "Write your response as if speaking directly to the user — "
+        "avoid phrases like 'based on the provided text' or 'the context says'. "
+        "Integrate the information naturally, as though you already know it.")
 ]).partial(system_prompt=system_prompt)
 
 assert set(combine_prompt.input_variables) == {"context", "question"}
@@ -423,6 +422,20 @@ def fetch_latest_report(uid: ObjectId) -> Tuple[Optional[Dict[str, Any]], Option
     print("[fetch_latest_report] no reports present")
     return None, None
 
+def report_to_text(latest_report: Dict[str, Any]) -> str:
+    symptoms = latest_report.get("symptoms") or []
+    return (
+        "User dermatology report:\n"
+        f"- Predicted condition: {latest_report.get('skinCondition', 'N/A')} "
+        f"(confidence: {latest_report.get('confidence', 'N/A')})\n"
+        f"- Treatment: {latest_report.get('treatment', 'N/A')}\n"
+        f"- Location: {latest_report.get('location', 'unknown')}\n"
+        f"- Size: {latest_report.get('size', 'unknown')}\n"
+        f"- Duration: {latest_report.get('duration', 'unknown')}\n"
+        f"- Symptoms: {', '.join(symptoms) if symptoms else 'none'}\n"
+        f"- Notes: {latest_report.get('additional', 'none')}\n"
+    )
+
 @app.route("/ask", methods=["POST"])
 @jwt_required()
 def ask():
@@ -439,12 +452,7 @@ def ask():
             return jsonify({"error": "Missing 'msg' field"}), 400
 
         # Ensure per-user memory
-        if identity not in user_memories:
-            user_memories[identity] = ConversationBufferMemory(
-                memory_key="chat_history",
-                return_messages=True
-            )
-        memory = user_memories[identity]
+        memory = get_or_create_memory(identity)
 
         # Fetch latest report
         latest_report, fetch_err = fetch_latest_report(uid)
@@ -486,24 +494,13 @@ def ask():
                 ]
             }), 200
 
-        # Report exists → print it before answering
-        print("\n User's Latest Dermatology Report (loaded)")
-        print(f"Predicted Condition: {latest_report.get('skinCondition', 'N/A')}")
-        print(f"Confidence: {latest_report.get('confidence', 'N/A')}")
-        print(f"Treatment: {latest_report.get('treatment', 'N/A')}")
-        print(f"Location: {latest_report.get('location', 'unknown')}")
-        print(f"Size: {latest_report.get('size', 'unknown')}")
-        print(f"Duration: {latest_report.get('duration', 'unknown')}")
-        print(f"Symptoms: {', '.join(latest_report.get('symptoms', [])) or 'none'}")
-        print(f"Additional Notes: {latest_report.get('additional', 'none')}")
-        print("================================================\n")
-
-        # Save report into memory
+        # Report exists
+         # Store report summary in memory
         symptoms = latest_report.get("symptoms") or []
         memory.save_context(
             {"input": "system"},
             {"output": (
-                f"User dermatology report summary:\n"
+                "User dermatology report summary:\n"
                 f"- Predicted condition: {latest_report.get('skinCondition', 'N/A')} "
                 f"(confidence: {latest_report.get('confidence', 'N/A')})\n"
                 f"- Treatment: {latest_report.get('treatment', 'N/A')}\n"
@@ -514,25 +511,35 @@ def ask():
                 f"- Notes: {latest_report.get('additional', 'none')}"
             )}
         )
-
-        # Conversational RAG
-        conversational_chain = ConversationalRetrievalChain.from_llm(
-            llm=llm,
-            retriever=retriever,
-            memory=memory,
-            combine_docs_chain_kwargs={"prompt": combine_prompt},
-            return_source_documents=False,
+        
+        report_text = report_to_text(latest_report)
+        
+        docs = retriever.get_relevant_documents(msg)
+        
+        # Build context and final prompt input
+        docs_text = "\n\n---\n\n".join(d.page_content for d in docs)
+        full_context = (
+            f"{report_text}\n\n"
+            f"Dermatology book excerpts:\n{docs_text}"
         )
-
-        out = conversational_chain.invoke({"question": msg})
-
+        
+        final_prompt = combine_prompt.format(
+            context=full_context,
+            question=msg,
+        )
+        
+        response = llm.invoke(final_prompt)
+        
+        # Save to memory as normal conversation
+        memory.save_context({"input": msg}, {"output": response.content})
+        
         return jsonify({
-            "answer": out.get("answer", ""),
+            "answer": response.content,
             "report_used": latest_report,
             "chat_history": [
-                {"role": m.type, "text": getattr(m, 'content', str(m))}
+                {"role": m.type, "text": getattr(m, "content", str(m))}
                 for m in memory.chat_memory.messages
-            ]
+            ],
         }), 200
 
     except Exception as e:
