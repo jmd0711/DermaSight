@@ -1,0 +1,23 @@
+.report-content {
+  padding-left: 10%;
+  padding-right: 10%;
+  height: 80%;
+}
+
+.skin-image {
+  aspect-ratio: 1/1;
+  border-color: gray;
+  border-style: solid;
+  border-radius: 5px;
+  width: 100%;
+  object-fit: contain;
+}
+
+.report-buttons {
+  display: flex;
+  justify-content: right;
+  margin-top: 10px;
+  position: absolute;
+  bottom: 10%;
+  right: 10%;
+}
