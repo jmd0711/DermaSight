@@ -12,22 +12,14 @@ services:
     startCommand: gunicorn --bind 0.0.0.0:$PORT app:app
 
     envVars:
-      - key: MONGO_URI
-        sync: false
+      - key: FLASK_ENV
+        value: production
       - key: JWT_SECRET_KEY
-        sync: false
-      - key: AWS_ACCESS_KEY
-        sync: false
-      - key: AWS_SECRET_KEY
-        sync: false
-      - key: AWS_REGION
-        sync: false
-      - key: S3_BUCKET_NAME
-        sync: false
-      - key: PINECONE_API_KEY
-        sync: false
-      - key: GOOGLE_API_KEY
-        sync: false
+        generateValue: true
+      - key: MODEL_PATH
+        value: /opt/models/lesion_model.h5
+      - key: UPLOAD_FOLDER
+        value: /opt/uploads
 
     autoDeploy: true
 
