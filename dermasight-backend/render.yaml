@@ -1,50 +1,25 @@
 services:
   - type: web
-    name: skin-lesion-api
+    name: derma-api
     env: python
-    plan: free 
-    region: oregon 
-
-    buildCommand: |
-      pip install --upgrade pip
-      pip install -r requirements.txt
-
-    startCommand: gunicorn --bind 0.0.0.0:$PORT app:app
-
-    envVars:
-      - key: FLASK_ENV
-        value: production
-      - key: JWT_SECRET_KEY
-        generateValue: true
-      - key: MODEL_PATH
-        value: /opt/models/lesion_model.h5
-      - key: UPLOAD_FOLDER
-        value: /opt/uploads
-
-    autoDeploy: true
-
-    healthCheckPath: /health
-    healthCheckTimeout: 30
-
-    disk:
-      name: model_storage
-      mountPath: /opt/models
-      sizeGB: 2
-
-    runtime:
-      pythonVersion: 3.10
-
-    # GPU is NOT available on Render free tier — comment kept for reference
-    # gpu:
-    #   type: nvidia-tesla-t4
-
-workers:
-  - type: worker
-    name: background-preprocessing
-    env: python
+    region: oregon
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn app:app --timeout 300
     plan: free
-    buildCommand: |
-      pip install --upgrade pip
-      pip install -r requirements.txt
-    startCommand: python worker.py
-    autoDeploy: false
+    envVars:
+      - key: MONGO_URI
+        sync: false
+      - key: JWT_SECRET_KEY
+        sync: false
+      - key: AWS_ACCESS_KEY
+        sync: false
+      - key: AWS_SECRET_KEY
+        sync: false
+      - key: AWS_REGION
+        sync: false
+      - key: S3_BUCKET_NAME
+        sync: false
+      - key: GOOGLE_API_KEY
+        sync: false
+      - key: PINECONE_API_KEY
+        sync: false
