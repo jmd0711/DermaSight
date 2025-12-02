@@ -91,6 +91,7 @@ def predict_from_bytes(img_bytes: bytes):
     top3_idx = np.argsort(probs)[-3:][::-1]
     top3 = [{"label": CLASS_NAMES[int(i)], "prob": round(float(probs[i]) * 100, 2)} for i in top3_idx]
     return top, top3
+
 # Load model and labels once at startup
 IMG_SIZE = (128, 128) 
 ALLOWED_EXT = {"jpg", "jpeg", "png", "webp", "heic", "heif", "avif"}
@@ -192,15 +193,15 @@ def prepare(img_bytes: bytes) -> np.ndarray:
         x = x / 255.0
     return x
 
-# Get skin condition by image
-@app.post("/predict")
-def predict():
-    file = request.files.get("image")
-    try:
-        top, top3 = predict_from_file(file)
-    except ValueError as e:
-        return jsonify({"error": str(e)}), 400
-    return jsonify({"top": top, "top3": top3})
+# # Get skin condition by image
+# @app.post("/predict")
+# def predict():
+#     file = request.files.get("image")
+#     try:
+#         top, top3 = predict_from_file(file)
+#     except ValueError as e:
+#         return jsonify({"error": str(e)}), 400
+#     return jsonify({"top": top, "top3": top3})
 
 # Upload skin lesion image, questionnaire + store ML report
 @app.route("/upload", methods=["POST"])
@@ -540,4 +541,4 @@ def ask():
         return jsonify({"error": str(e)}), 500
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    app.run()
