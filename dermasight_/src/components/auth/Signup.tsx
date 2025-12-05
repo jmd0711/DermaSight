@@ -106,6 +106,7 @@ const Signup = () => {
       username: formData.username,
       email: formData.email,
       password: formData.password,
+      confirmPassword: formData.confirmPassword,
       age: formData.age,
     };
 

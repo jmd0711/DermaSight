@@ -27,7 +27,7 @@ export const useAuth = () => {
     }
   }, []);
 
-  const signup = useCallback(async (userData: SignupData & { age: number }) => {
+  const signup = useCallback(async (userData: SignupData) => {
     setIsLoading(true);
     setError(null);
     
