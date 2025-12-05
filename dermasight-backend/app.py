@@ -358,23 +358,63 @@ GOOGLE_API_KEY=os.environ.get('GOOGLE_API_KEY')
 os.environ["PINECONE_API_KEY"] = PINECONE_API_KEY
 os.environ["GOOGLE_API_KEY"] = GOOGLE_API_KEY
 
-embeddings = download_hugging_face_embeddings()
-index_name = "medicalbot"
-# Embed each chunk and upsert the embeddings into your Pinecone index.
-docsearch = PineconeVectorStore.from_existing_index(
-    index_name=index_name,
-    embedding=embeddings
-)
+embeddings = None
+docsearch = None
+retriever = None
+llm = None
 
-retriever = docsearch.as_retriever(search_type="similarity", search_kwargs={"k":3})
+def get_rag_components():
+    global embeddings, docsearch, retriever, llm
 
-llm = ChatGoogleGenerativeAI(
-    model="gemini-2.0-flash",
-    temperature=0,
-    max_tokens=None,
-    timeout=None,
-    max_retries=2
-)
+    if embeddings is None or docsearch is None or retriever is None or llm is None:
+        # 1) Embeddings from Hugging Face
+        embeddings = download_hugging_face_embeddings()
+
+        # 2) Pinecone vector store
+        index_name = "medicalbot"
+        docsearch_local = PineconeVectorStore.from_existing_index(
+            index_name=index_name,
+            embedding=embeddings,
+        )
+
+        # 3) Retriever
+        retriever_local = docsearch_local.as_retriever(
+            search_type="similarity",
+            search_kwargs={"k": 3},
+        )
+
+        # 4) LLM
+        llm_local = ChatGoogleGenerativeAI(
+            model="gemini-2.0-flash",
+            temperature=0,
+            max_tokens=None,
+            timeout=None,
+            max_retries=2,
+        )
+
+        docsearch = docsearch_local
+        retriever = retriever_local
+        llm = llm_local
+
+    return retriever, llm
+
+# embeddings = download_hugging_face_embeddings()
+# index_name = "medicalbot"
+# # Embed each chunk and upsert the embeddings into your Pinecone index.
+# docsearch = PineconeVectorStore.from_existing_index(
+#     index_name=index_name,
+#     embedding=embeddings
+# )
+
+# retriever = docsearch.as_retriever(search_type="similarity", search_kwargs={"k":3})
+
+# llm = ChatGoogleGenerativeAI(
+#     model="gemini-2.0-flash",
+#     temperature=0,
+#     max_tokens=None,
+#     timeout=None,
+#     max_retries=2
+# )
 
 system_prompt = (
     "You are a dermatology assistant. You must answer strictly from the retrieved "
@@ -458,6 +498,7 @@ def fetch_latest_report(uid: ObjectId) -> Tuple[Optional[Dict[str, Any]], Option
 @jwt_required()
 def ask():
     try:
+        retriever, llm = get_rag_components()
         identity = get_jwt_identity()
         try:
             uid = ObjectId(identity)
