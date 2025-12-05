@@ -36,6 +36,9 @@ register_heif_opener()
 
 app = Flask(__name__)
 
+_model = None
+_CLASS_NAMES = None
+
 load_dotenv()
 
 # Connect to MongoDB
@@ -84,12 +87,23 @@ def predict_from_bytes(img_bytes: bytes):
     if not img_bytes:
         raise ValueError("empty file")
 
-    x = prepare(img_bytes)  
+    model, CLASS_NAMES = get_model_and_labels()
+
+    x = prepare(img_bytes)  # your existing preprocessing
     probs = model.predict(x)[0]
+
     top_idx = int(np.argmax(probs))
-    top = {"label": CLASS_NAMES[top_idx], "prob": round(float(probs[top_idx]) * 100, 2)}
+    top = {
+        "label": CLASS_NAMES[top_idx],
+        "prob": round(float(probs[top_idx]) * 100, 2),
+    }
+
     top3_idx = np.argsort(probs)[-3:][::-1]
-    top3 = [{"label": CLASS_NAMES[int(i)], "prob": round(float(probs[i]) * 100, 2)} for i in top3_idx]
+    top3 = [
+        {"label": CLASS_NAMES[int(i)], "prob": round(float(probs[i]) * 100, 2)}
+        for i in top3_idx
+    ]
+
     return top, top3
 
 # Load model and labels once at startup
@@ -98,9 +112,25 @@ ALLOWED_EXT = {"jpg", "jpeg", "png", "webp", "heic", "heif", "avif"}
 
 DIVIDE_BY_255 = False
 
-model = keras.models.load_model("skin_mobilenetv3.keras", compile=False)
-with open("mobilenetv3_labels.json") as f:
-    CLASS_NAMES = json.load(f)
+# model = keras.models.load_model("skin_mobilenetv3.keras", compile=False)
+# with open("mobilenetv3_labels.json") as f:
+#     CLASS_NAMES = json.load(f)
+
+def get_model_and_labels():
+    global _model, _CLASS_NAMES
+    if _model is None or _CLASS_NAMES is None:
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+
+        model_path = os.path.join(base_dir, "skin_mobilenetv3.keras")
+        labels_path = os.path.join(base_dir, "mobilenetv3_labels.json")
+
+        # compile=False makes loading more robust across Keras versions
+        _model = keras.models.load_model(model_path, compile=False)
+
+        with open(labels_path, "r") as f:
+            _CLASS_NAMES = json.load(f)
+
+    return _model, _CLASS_NAMES
 
 @app.route("/")
 def index():
@@ -541,5 +571,5 @@ def ask():
         return jsonify({"error": str(e)}), 500
 
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))  # Render sets PORT
+    port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
