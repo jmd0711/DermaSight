@@ -135,12 +135,11 @@ const Report = () => {
                 {/* Characteristics */}
                 <div className="border-l-4 border-blue-500 pl-4">
                   <h3 className="text-lg font-semibold text-gray-800 mb-3">
-                    📋 Characteristics
+                    📋 Skin Condition
                   </h3>
                   <div className="bg-blue-50 p-4 rounded-lg mb-3">
                     <p className="text-blue-800 text-sm font-medium">
-                      Note: This is a demonstration report. In production, this would contain 
-                      AI-generated analysis of the skin condition.
+                      Note: This app is intended for informational purposes only and uses machine learning to provide preliminary insights into skin conditions. It does not replace professional medical advice, diagnosis, or treatment. The results provided by this app should be used as a research or educational aid only, and relying solely on them for medical decisions is not recommended.
                     </p>
                   </div>
                   <p className="text-gray-600 mb-3">The AI system’s assessment gives your condition a {data.analysisResult.confidence}% confidence score that it is the following condition(s):</p>
@@ -176,7 +175,7 @@ const Report = () => {
                   </h3>
                   <div className="bg-green-50 p-4 rounded-lg mb-3">
                     <p className="text-green-800 text-sm font-medium">
-                      Demo: Treatment recommendations would be AI-generated
+                      Note: Treatment recommendations provided are general suggestions and may not be suitable for everyone. Always consult a healthcare professional before starting any new treatment.
                     </p>
                   </div>
                   <p className="text-gray-600 mb-3">Common approaches may include:</p>
