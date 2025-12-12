@@ -145,7 +145,7 @@ const Report = () => {
                   <p className="text-gray-600 mb-3">The AI system’s assessment gives your condition a {data.analysisResult.confidence}% confidence score that it is the following condition(s):</p>
                   <ul className="list-disc list-inside text-gray-600 space-y-1">
                     {data.analysisResult.possibleConditions.map((condition, index) => (
-                    <li>{condition}</li>
+                    <li key={index}>{condition}</li>
                     ))}
                   </ul>
                 </div>
@@ -181,7 +181,7 @@ const Report = () => {
                   <p className="text-gray-600 mb-3">Common approaches may include:</p>
                   <ul className="list-disc list-inside text-gray-600 space-y-1">
                     {data.analysisResult.recommendations.map((recommendation, index) => (
-                    <li className="pl-[1em] indent-[-1em]">{recommendation}</li>
+                    <li key={index} className="pl-[1em] indent-[-1em]">{recommendation}</li>
                     ))}
                   </ul>
                 </div>
@@ -204,7 +204,7 @@ const Report = () => {
                   )} */}
                   <p className="text-gray-600 mb-2">Seek medical attention if:</p>
                   <ul className="list-disc list-inside text-gray-600 space-y-1">
-                    <li>The condition worsens or doesn't improve</li>
+                    <li>The condition worsens or doesn&apos;t improve</li>
                     <li>You experience severe symptoms</li>
                     <li>You have concerns about the condition</li>
                     <li>The lesion changes in appearance, size, or color</li>

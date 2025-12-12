@@ -104,7 +104,7 @@ const Profile = () => {
                   <span className="text-2xl text-white">👤</span>
                 </div>
                 <h2 className="text-xl font-semibold text-gray-800 mb-2">
-                  {JSON.parse(localStorage.getItem('token')).user.username || 'User'}
+                  {JSON.parse(localStorage.getItem('token') ?? '{}')?.user?.username || 'User'}
                 </h2>
                 <p className="text-gray-600 text-sm mb-4">
                   DermaSight Member
