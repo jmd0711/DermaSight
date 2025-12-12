@@ -19,6 +19,7 @@ export interface LoginCredentials {
 
 export interface SignupData extends LoginCredentials {
   email: string;
+  age: number;
   confirmPassword: string;
 }
 
@@ -110,7 +111,7 @@ export interface ChatConversation {
 }
 
 // API Response Types
-export interface ApiResponse<T = any> {
+export interface ApiResponse<T = unknown> {
   success: boolean;
   data?: T;
   message?: string;

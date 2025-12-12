@@ -29,7 +29,7 @@ const Chatbot = () => {
       const response = await chatApi.sendMessage(inputMessage);
 
       if (response.success && response.data) {
-        console.log(response)
+        //console.log(response)
         const botMessage: ChatMessage = {
           id: (Date.now() + 1).toString(),
           content: response.data.response.answer,
