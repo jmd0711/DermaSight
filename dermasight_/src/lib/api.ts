@@ -10,7 +10,7 @@ import {
 
 // API Configuration
 const API_CONFIG = {
-  BASE_URL: process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:5000',
+  BASE_URL: process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:5002',
   CHATBOT_URL: process.env.NEXT_PUBLIC_CHATBOT_URL || 'http://localhost:8080',
   TIMEOUT: 10000,
 };

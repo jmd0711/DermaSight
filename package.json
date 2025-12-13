@@ -1,0 +1,12 @@
+{
+      "name": "dermasight",
+      "version": "1.0.0",
+      "private": true,
+      "scripts": {
+            "dev": "cd dermasight_ && npm run dev",
+            "build": "cd dermasight_ && npm run build",
+            "start": "cd dermasight_ && npm start",
+            "lint": "cd dermasight_ && npm run lint"
+      },
+      "description": "DermaSight - Skin condition detection and analysis application"
+}
