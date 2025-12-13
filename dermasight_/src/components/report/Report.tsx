@@ -135,18 +135,17 @@ const Report = () => {
                 {/* Characteristics */}
                 <div className="border-l-4 border-blue-500 pl-4">
                   <h3 className="text-lg font-semibold text-gray-800 mb-3">
-                    📋 Characteristics
+                    📋 Skin Condition
                   </h3>
                   <div className="bg-blue-50 p-4 rounded-lg mb-3">
                     <p className="text-blue-800 text-sm font-medium">
-                      Note: This is a demonstration report. In production, this would contain 
-                      AI-generated analysis of the skin condition.
+                      Note: This app is intended for informational purposes only and uses machine learning to provide preliminary insights into skin conditions. It does not replace professional medical advice, diagnosis, or treatment. The results provided by this app should be used as a research or educational aid only, and relying solely on them for medical decisions is not recommended.
                     </p>
                   </div>
                   <p className="text-gray-600 mb-3">The AI system’s assessment gives your condition a {data.analysisResult.confidence}% confidence score that it is the following condition(s):</p>
                   <ul className="list-disc list-inside text-gray-600 space-y-1">
                     {data.analysisResult.possibleConditions.map((condition, index) => (
-                    <li>{condition}</li>
+                    <li key={index}>{condition}</li>
                     ))}
                   </ul>
                 </div>
@@ -176,13 +175,13 @@ const Report = () => {
                   </h3>
                   <div className="bg-green-50 p-4 rounded-lg mb-3">
                     <p className="text-green-800 text-sm font-medium">
-                      Demo: Treatment recommendations would be AI-generated
+                      Note: Treatment recommendations provided are general suggestions and may not be suitable for everyone. Always consult a healthcare professional before starting any new treatment.
                     </p>
                   </div>
                   <p className="text-gray-600 mb-3">Common approaches may include:</p>
                   <ul className="list-disc list-inside text-gray-600 space-y-1">
                     {data.analysisResult.recommendations.map((recommendation, index) => (
-                    <li className="pl-[1em] indent-[-1em]">{recommendation}</li>
+                    <li key={index} className="pl-[1em] indent-[-1em]">{recommendation}</li>
                     ))}
                   </ul>
                 </div>
@@ -205,7 +204,7 @@ const Report = () => {
                   )} */}
                   <p className="text-gray-600 mb-2">Seek medical attention if:</p>
                   <ul className="list-disc list-inside text-gray-600 space-y-1">
-                    <li>The condition worsens or doesn't improve</li>
+                    <li>The condition worsens or doesn&apos;t improve</li>
                     <li>You experience severe symptoms</li>
                     <li>You have concerns about the condition</li>
                     <li>The lesion changes in appearance, size, or color</li>

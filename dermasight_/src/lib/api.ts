@@ -1,4 +1,4 @@
-import axios, { AxiosInstance, AxiosResponse } from 'axios';
+import axios, { AxiosError, AxiosInstance, AxiosResponse } from 'axios';
 import { 
   ApiResponse, 
   LoginCredentials, 
@@ -13,6 +13,20 @@ const API_CONFIG = {
   BASE_URL: process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:5000',
   CHATBOT_URL: process.env.NEXT_PUBLIC_CHATBOT_URL || 'http://localhost:8080',
   TIMEOUT: 10000,
+};
+
+type ApiReport = {
+  report_id: string;
+  imageUrl: string;
+  dateGenerated: { $date: string };
+  location: string;
+  size: string;
+  duration: string;
+  symptoms: string[];
+  additional?: string;
+  skinCondition?: string;
+  confidence?: number;
+  treatment?: string;
 };
 
 class ApiClient {
@@ -132,7 +146,7 @@ class ApiClient {
     try {
       const response: AxiosResponse<{ message: string; userId: string; username: string; access: string; refresh: string }> = 
         await this.client.post('/login', credentials);
-      
+
       return {
         success: true,
         data: {
@@ -144,11 +158,22 @@ class ApiClient {
         message: response.data.message,
         statusCode: response.status,
       };
-    } catch (error: any) {
+    } catch (error: unknown) {
+      if (axios.isAxiosError(error)) {
+        const err = error as AxiosError<{ error?: string }>;
+        console.log(err)
+        return {
+          success: false,
+          error: err.response?.data?.error || 'Login failed',
+          statusCode: err.response?.status || 500,
+        };
+      }
+
+      // Non-Axios error fallback
       return {
         success: false,
-        error: error.response?.data?.error || 'Login failed',
-        statusCode: error.response?.status || 500,
+        error: 'Login failed',
+        statusCode: 500,
       };
     }
   }
@@ -164,11 +189,22 @@ class ApiClient {
         message: 'User created successfully',
         statusCode: response.status,
       };
-    } catch (error: any) {
+    } catch (error: unknown) {
+      if (axios.isAxiosError(error)) {
+        const err = error as AxiosError<{ error?: string }>;
+
+        return {
+          success: false,
+          error: err.response?.data?.error || 'Signup failed',
+          statusCode: err.response?.status || 500,
+        };
+      }
+
+      // Non-Axios error fallback
       return {
         success: false,
-        error: error.response?.data?.error || 'Signup failed',
-        statusCode: error.response?.status || 500,
+        error: 'Signup failed',
+        statusCode: 500,
       };
     }
   }
@@ -198,7 +234,7 @@ class ApiClient {
       const response: AxiosResponse<{ message: string; 
         report_id: string;
         imageUrl: string;
-        dateGenerated: any;
+        dateGenerated: { $date: string };
         location: string;
         size: string;
         duration: string;
@@ -242,11 +278,22 @@ class ApiClient {
         message: response.data.message,
         statusCode: response.status,
       };
-    } catch (error: any) {
+    } catch (error: unknown) {
+      if (axios.isAxiosError(error)) {
+        const err = error as AxiosError<{ error?: string }>;
+
+        return {
+          success: false,
+          error: err.response?.data?.error || 'Upload failed',
+          statusCode: err.response?.status || 500,
+        };
+      }
+
+      // Non-Axios error fallback
       return {
         success: false,
-        error: error.response?.data?.error || 'Upload failed',
-        statusCode: error.response?.status || 500,
+        error: 'Upload failed',
+        statusCode: 500,
       };
     }
   }
@@ -254,7 +301,7 @@ class ApiClient {
   // // User API
 async getUserReports(): Promise<ApiResponse<{ reports: MedicalReport[] }>> {
   try {
-    const response: AxiosResponse<{ reports: any[] }> = 
+    const response: AxiosResponse<{ reports: ApiReport[] }> = 
       await this.client.get('/user/reports');
     const tokenData = typeof window !== 'undefined'
       ? JSON.parse(localStorage.getItem('token') || '{}')
@@ -289,41 +336,62 @@ async getUserReports(): Promise<ApiResponse<{ reports: MedicalReport[] }>> {
       message: 'Reports fetched successfully',
       statusCode: response.status,
     };
-  } catch (error: any) {
+  } catch (error: unknown) {
+    if (axios.isAxiosError(error)) {
+      const err = error as AxiosError<{ error?: string }>;
+
+      return {
+        success: false,
+        error: err.response?.data?.error || 'Failed to fetch reports',
+        statusCode: err.response?.status || 500,
+      };
+    }
+
     return {
       success: false,
-      error: error.response?.data?.error || 'Failed to fetch reports',
-      statusCode: error.response?.status || 500,
+      error: 'Failed to fetch reports',
+      statusCode: 500,
     };
   }
 }
 
 async deleteUserReport(reportId: string): Promise<ApiResponse<null>> {
   try {
-    const res = await this.client.delete(`/user/reports/${reportId}`);
+    const res: AxiosResponse<{ message?: string }> = await this.client.delete(`/user/reports/${reportId}`);
     return {
       success: true,
       data: null,
       message: res.data.message || 'Report deleted successfully',
       statusCode: res.status,
     };
-  } catch (error: any) {
+  } catch (error: unknown) {
+    if (axios.isAxiosError(error)) {
+      const err = error as AxiosError<{ error?: string }>;
+
+      return {
+        success: false,
+        error: err.response?.data?.error || 'Failed to delete report',
+        statusCode: err.response?.status || 500,
+      };
+    }
+
+    // Non-Axios or unexpected error
     return {
       success: false,
-      error: error.response?.data?.error || 'Failed to delete report',
-      statusCode: error.response?.status || 500,
+      error: 'Failed to delete report',
+      statusCode: 500,
     };
   }
 }
 
   // Chatbot API
-  async sendChatMessage(message: string): Promise<ApiResponse<{ response: string }>> {
+  async sendChatMessage(message: string): Promise<ApiResponse<{ response: {answer: string} }>> {
     try {
       // const formData = new URLSearchParams();
       // formData.append('msg', message);
       const formData = { "msg": message }
 
-      const response: AxiosResponse<string> = 
+      const response: AxiosResponse<{answer: string}> = 
         await this.client.post('/ask', formData);
 
       return {
@@ -331,12 +399,23 @@ async deleteUserReport(reportId: string): Promise<ApiResponse<null>> {
         data: { response: response.data },
         statusCode: response.status,
       };
-    } catch (error: any) {
+    } catch (error: unknown) {
+    if (axios.isAxiosError(error)) {
+      const err = error as AxiosError<{ error?: string }>;
+
       return {
         success: false,
-        error: error.response?.data?.error || 'Chat request failed',
-        statusCode: error.response?.status || 500,
+        error: err.response?.data?.error || 'Chat request failed',
+        statusCode: err.response?.status || 500,
       };
+    }
+
+    // Non-Axios or unexpected error
+    return {
+      success: false,
+      error: 'Chat request failed',
+      statusCode: 500,
+    };
     }
   }
 

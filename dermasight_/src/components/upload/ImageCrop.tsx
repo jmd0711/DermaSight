@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { Button } from 'react-bootstrap';
-import Cropper from 'react-easy-crop';
+import Cropper, { type Area } from 'react-easy-crop';
 import getCroppedImg from './cropImage';
 
 interface ImageCropProps {
@@ -14,9 +14,9 @@ interface ImageCropProps {
 const ImageCrop = ({ setImageURL, imageURL, setCroppedImage }: ImageCropProps) => {
   const [crop, setCrop] = useState({ x: 0, y: 0 });
   const [zoom, setZoom] = useState(1);
-  const [croppedAreaPixels, setCroppedAreaPixels] = useState<any>(null);
+  const [croppedAreaPixels, setCroppedAreaPixels] = useState<Area | null>(null);
 
-  const onCropComplete = (croppedArea: any, croppedAreaPixels: any) => {
+  const onCropComplete = (_croppedArea: Area, croppedAreaPixels: Area) => {
     setCroppedAreaPixels(croppedAreaPixels);
   };
 
@@ -26,6 +26,7 @@ const ImageCrop = ({ setImageURL, imageURL, setCroppedImage }: ImageCropProps) =
 
   const onConfirm = async () => {
     try {
+      if (!croppedAreaPixels) return;
       const croppedImage = await getCroppedImg(imageURL, croppedAreaPixels);
       if (croppedImage) {
         setCroppedImage(croppedImage);
