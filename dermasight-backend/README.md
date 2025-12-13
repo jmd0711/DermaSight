@@ -351,25 +351,4 @@ Model configuration is managed through `models/ensemble_config.json`:
 
 ---
 
-## Getting Started with medical chatbot
-
-### Set Up
-
-In the project directory:
-
-To download all requirements run:
-#### `pip install -r requirements.txt`
-
-Add your API keys in:
-#### `.env`
-
-To initiate a pinecone index and create a knowledgebase run:
-#### `python store_index.py`
-
-### Run
-In DermaSight/dermasight-backend run
-#### `python dermaSight.py`
-
----
-
 *This ensemble implementation significantly improves DermaSight's diagnostic capabilities by leveraging the collective knowledge of three distinct dermatology datasets and their trained models.*
