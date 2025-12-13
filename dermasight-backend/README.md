@@ -1,4 +1,4 @@
-# Getting Started with medical chatbot
+# Getting Started with Dermatology AI Assistant backend
 
 ## Set Up
 
