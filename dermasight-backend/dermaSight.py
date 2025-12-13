@@ -344,6 +344,7 @@ llm = ChatGoogleGenerativeAI(
     max_retries=2
 )
 
+# Chatbot Prompt
 system_prompt = (
     "You are a dermatology assistant. You must answer strictly from the retrieved "
     "dermatology book documents and, when available, the user's latest skin report that is "
@@ -366,6 +367,7 @@ combine_prompt = ChatPromptTemplate.from_messages([
 
 assert set(combine_prompt.input_variables) == {"context", "question"}
 
+# Per user memory
 def get_or_create_memory(user_id: str) -> ConversationBufferMemory:
     if user_id not in user_memories:
         user_memories[user_id] = ConversationBufferMemory(
@@ -374,6 +376,7 @@ def get_or_create_memory(user_id: str) -> ConversationBufferMemory:
         )
     return user_memories[user_id]
 
+# Question classification with Gemini
 def classify_question_with_gemini(msg: str) -> str:
     """
     Returns one of: 'dermatology', 'medical_non_dermatology', 'non_medical'
@@ -387,7 +390,7 @@ def classify_question_with_gemini(msg: str) -> str:
         f"User message: \"{msg}\"\n"
         "Respond with only the label: dermatology, medical_non_dermatology, or non_medical."
     )
-    result = llm.invoke(cls_prompt)  # pass a plain string
+    result = llm.invoke(cls_prompt)
     label = (result.content or "").strip().lower()
     if "dermatology" in label:
         return "dermatology"
@@ -396,6 +399,7 @@ def classify_question_with_gemini(msg: str) -> str:
     else:
         return "non_medical"
 
+# Get latest report for user
 def fetch_latest_report(uid: ObjectId) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
     user = mongo.db.users.find_one({"_id": uid}, {"skinProblemReports": {"$slice": -1}})
     if not user:
@@ -405,9 +409,8 @@ def fetch_latest_report(uid: ObjectId) -> Tuple[Optional[Dict[str, Any]], Option
     reports = user.get("skinProblemReports") or []
     if reports:
         print(f"[fetch_latest_report] got last report via $slice: -1 (count={len(reports)})")
-        return reports[0], None  # with $slice:-1 we get a list of 1 (the last)
+        return reports[0], None  #get a list of 1 (the last)
 
-    # Fallback: get the whole array to be sure
     user_all = mongo.db.users.find_one({"_id": uid}, {"skinProblemReports": 1})
     if not user_all:
         print("[fetch_latest_report] user missing on second lookup")
@@ -436,6 +439,7 @@ def report_to_text(latest_report: Dict[str, Any]) -> str:
         f"- Notes: {latest_report.get('additional', 'none')}\n"
     )
 
+# Chatbot endpoint
 @app.route("/ask", methods=["POST"])
 @jwt_required()
 def ask():
@@ -494,8 +498,7 @@ def ask():
                 ]
             }), 200
 
-        # Report exists
-         # Store report summary in memory
+        # If report exists, store report summary in memory
         symptoms = latest_report.get("symptoms") or []
         memory.save_context(
             {"input": "system"},
