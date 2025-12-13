@@ -49,8 +49,7 @@ python dermaSight.py
 ## API Endpoints
 Different tasks can be run on an endpoint tester using the endpoints provided such as:
 
-@app.route("/signup", methods=["POST"])
-
+### **POST `/signup`**
 Potential inputs for the routes include jpegs of potential skin lesions
 and form data for passing information
 
