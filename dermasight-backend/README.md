@@ -261,15 +261,69 @@ Shared utility module used across the project.
 
 ---
 
-## Notes
+## ML Model Training
 
-- This backend is designed to be paired with a frontend client
-- The chatbot is restricted to dermatology-related medical queries
-- ML predictions should not be interpreted as medical diagnoses
+### Data Pipeline
+- Loaded using `tf.keras.preprocessing.image_dataset_from_directory`
+- Batch size: **16**
+- Dataset split:
+  - Training set
+  - Validation set (20% of training data)
+  - Test set (held out)
+- Performance optimizations:
+  - Shuffling
+  - Prefetching with `tf.data.AUTOTUNE`
 
-This project is intended for academic and research use only.
+---
 
+### Class Imbalance Handling
 
+The DermNet dataset is highly imbalanced. To address this:
+
+- Class weights are computed using `sklearn.utils.class_weight.compute_class_weight`
+- Balanced class weights are applied during training via the `class_weight` argument
+
+---
+
+### Model Architecture
+
+The model is based on **MobileNetV3 Large**, pre-trained on ImageNet, using transfer learning.
+
+**Architecture Overview**:
+1. MobileNetV3 Large backbone (`include_top=False`)
+2. Global Average Pooling
+3. Dense layer (512 units, ReLU)
+4. Dropout (0.5)
+5. Output Dense layer with Softmax activation
+
+Early layers of the backbone are frozen to preserve low-level visual features.
+
+---
+
+### Training Configuration
+
+- **Loss Function**: Categorical Cross-Entropy
+- **Optimizer**: Adam (learning rate = 0.001)
+- **Metrics**: Accuracy
+- **Epochs**: 15
+
+#### Callbacks
+- **EarlyStopping** (patience = 10, monitor = `val_accuracy`)
+- **ReduceLROnPlateau** (factor = 0.2, patience = 3)
+- **ModelCheckpoint** (saves best model by validation accuracy)
+
+---
+
+### Model Outputs
+
+After training, the following artifacts are saved:
+
+- `skin_mobilenetv3.keras` – trained Keras model used by the backend
+- `mobilenetv3_labels.json` – ordered list of class labels
+
+These files are loaded at backend startup for inference.
+
+---
 
 # DermaSight Ensemble Model - Branch: pushpal/ensemble to checkout the ensemble model and also in the only PR left!!! 
 
