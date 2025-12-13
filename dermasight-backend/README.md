@@ -62,6 +62,93 @@ AWS
 numpy
 keras
 
+---
+
+### **POST `/login`**
+Authenticates a user and issues JWT tokens.
+
+**Input (JSON)**:
+```json
+{
+  "username": "string",
+  "password": "string"
+}
+```
+
+**Output (200 OK)**:
+```json
+{
+  "message": "Login successful",
+  "userId": "<mongo_object_id>",
+  "username": "string",
+  "access": "<jwt_access_token>",
+  "refresh": "<jwt_refresh_token>"
+}
+```
+
+---
+
+### **POST `/auth/refresh`**
+Refreshes an expired access token.
+
+**Headers**:
+```
+Authorization: Bearer <refresh_token>
+```
+
+**Output (200 OK)**:
+```json
+{ "access": "<new_access_token>" }
+```
+---
+### **POST `/upload`** 🔐
+Uploads a skin lesion image, questionnaire data, runs ML inference, and stores a report.
+
+**Headers**:
+```
+Authorization: Bearer <access_token>
+```
+
+**Input (multipart/form-data)**:
+- `image`: Image file
+- `location`: Body location
+- `size`: Lesion size
+- `duration`: Duration of lesion
+- `symptoms`: List of symptoms
+- `additional`: Additional notes (optional)
+
+**Output (200 OK)**:
+- Stored report metadata, prediction, and treatment recommendation
+
+---
+
+### **GET `/user/reports`** 🔐
+Retrieves all stored skin reports for the authenticated user.
+
+**Headers**:
+```
+Authorization: Bearer <access_token>
+```
+
+**Output (200 OK)**:
+```json
+{ "reports": [ /* array of reports */ ] }
+```
+
+---
+
+### **DELETE `/user/reports/<report_id>`** 🔐
+Deletes a specific skin report.
+
+**Headers**:
+```
+Authorization: Bearer <access_token>
+```
+
+**Output (200 OK)**:
+```json
+{ "message": "Report deleted" }
+```
 
 ---
 
