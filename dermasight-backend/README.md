@@ -22,5 +22,17 @@ Different tasks can be run on an endpoint tester using the endpoints provided su
 
 @app.route("/signup", methods=["POST"])
 
+Potential inputs for the routes include jpegs of potential skin lesions
+and form data for passing information
+
+The expected outputs include json data of results
+
+Required dependencies include:
+Flask
+Werkzeug
+AWS
+numpy
+keras
+
 In DermaSight/dermasight-backend run
 ### `python dermaSight.py`
