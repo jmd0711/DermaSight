@@ -23,3 +23,12 @@ bun dev
 ```
 Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 ### Backend
+```bash
+cd dermasight-backend
+```
+```bash
+pip install -r requirements.txt
+```
+```bash
+python store_index.py
+```
