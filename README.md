@@ -30,5 +30,5 @@ cd dermasight-backend
 pip install -r requirements.txt
 ```
 ```bash
-python store_index.py
+python dermaSight.py
 ```
