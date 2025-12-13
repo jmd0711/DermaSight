@@ -1,5 +1,5 @@
 import os
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify 
 from flask_jwt_extended import (
     JWTManager, create_access_token, create_refresh_token,
     jwt_required, get_jwt_identity,
@@ -15,10 +15,9 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from src.helper import download_hugging_face_embeddings
 from langchain_pinecone import PineconeVectorStore
 from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain.chains import ConversationalRetrievalChain
-from langchain.memory import ConversationBufferMemory
-from langchain.chains import ConversationalRetrievalChain
-from langchain.chains.combine_documents import create_stuff_documents_chain
+from langchain_classic.chains import ConversationalRetrievalChain
+from langchain_classic.memory import ConversationBufferMemory
+from langchain_classic.chains.combine_documents import create_stuff_documents_chain
 from langchain_core.prompts import ChatPromptTemplate
 from dotenv import load_dotenv
 from src.prompt import *
@@ -27,8 +26,11 @@ from werkzeug.utils import secure_filename
 import tensorflow as tf
 import numpy as np, json, io, os
 from PIL import Image, UnidentifiedImageError
-import keras 
 import traceback
+from tensorflow import keras
+tf.get_logger().setLevel("ERROR")
+tf.keras.utils.disable_interactive_logging()
+import json
 from typing import Optional, Tuple, Dict, Any
 from pillow_heif import register_heif_opener
 register_heif_opener()
@@ -39,7 +41,7 @@ app = Flask(__name__)
 load_dotenv()
 
 # Connect to MongoDB
-app.config["MONGO_URI"] = os.environ.get('MONGO_URI')
+app.config["MONGO_URI"] = os.getenv("MONGO_URI") or MONGO_URI
 
 #Configure JWT
 app.config["JWT_SECRET_KEY"] = os.getenv("JWT_SECRET_KEY") or "f1e3b5c8d2a1f6e7c9b8d7a6e4c3f2b1d0a9e8f7c6b5d4a3e2f1c0b9d8a7e6f5" #change this later
@@ -80,26 +82,260 @@ def upload_image_to_s3_bytes(img_bytes: bytes, filename: str, content_type: str 
     )
     return f"https://{BUCKET_NAME}.s3.{AWS_REGION}.amazonaws.com/{filename}"
 
+# def predict_from_bytes(img_bytes: bytes):
+#     if not img_bytes:
+#         raise ValueError("empty file")
+
+#     x = prepare(img_bytes)  
+#     probs = model.predict(x)[0]
+#     top_idx = int(np.argmax(probs))
+#     top = {"label": CLASS_NAMES[top_idx], "prob": round(float(probs[top_idx]) * 100, 2)}
+#     top3_idx = np.argsort(probs)[-3:][::-1]
+#     top3 = [{"label": CLASS_NAMES[int(i)], "prob": round(float(probs[i]) * 100, 2)} for i in top3_idx]
+#     return top, top3
+# Load model and labels once at startup
+# IMG_SIZE = (128, 128) 
+# ALLOWED_EXT = {"jpg", "jpeg", "png", "webp", "heic", "heif", "avif"}
+
+# DIVIDE_BY_255 = False
+
+# model = keras.models.load_model("skin_mobilenetv3.keras", compile=False)
+# with open("mobilenetv3_labels.json") as f:
+#     CLASS_NAMES = json.load(f)
+
+# ============================================================================
+# LOAD ENSEMBLE MODELS (SILENT MODE)
+# ============================================================================
+
+import os
+import logging
+
+# Suppress Keras/TensorFlow logging
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'  # Must be set before TF imports, but helps for future
+logging.getLogger('tensorflow').setLevel(logging.ERROR)
+logging.getLogger('keras').setLevel(logging.ERROR)
+
+# Disable Keras interactive logging
+tf.get_logger().setLevel('ERROR')
+
+print("=" * 60)
+print("LOADING ENSEMBLE MODELS")
+print("=" * 60)
+
+# Load ensemble configuration
+with open('models/ensemble_config.json', 'r') as f:
+    ensemble_config = json.load(f)
+
+# Store all models
+ENSEMBLE_MODELS = []
+
+for model_config in ensemble_config['models']:
+    print(f"\nLoading {model_config['name']}...")
+    
+    # Load model silently using Keras directly for better compatibility
+    import keras
+    model = keras.models.load_model(model_config['path'], compile=False, safe_mode=False)
+    
+    # Load classes
+    with open(model_config['classes_path'], 'r') as f:
+        classes_list = json.load(f)
+        classes = {i: cls for i, cls in enumerate(classes_list)}
+    
+    ENSEMBLE_MODELS.append({
+        'name': model_config['name'],
+        'model': model,
+        'classes': classes,
+        'weight': model_config['weight']
+    })
+    
+    print(f"  ✅ Loaded {model_config['name']} with {len(classes)} classes")
+
+print("\n" + "=" * 60)
+print(f"✅ ENSEMBLE READY: {len(ENSEMBLE_MODELS)} models loaded")
+print("=" * 60 + "\n")
+
+# finally:
+#     # Restore stdout
+#     sys.stdout = old_stdout
+
+# Configuration
+IMG_SIZE = ensemble_config.get('img_size', 224)
+VOTING_STRATEGY = ensemble_config.get('voting_strategy', 'weighted_average')
+ALLOWED_EXT = {"jpg", "jpeg", "png", "webp", "heic", "heif", "avif"}
+# ============================================================================
+# ENSEMBLE PREDICTION FUNCTIONS
+# ============================================================================
+
+def preprocess_image_for_ensemble(image):
+    """Preprocess image for model input"""
+    if isinstance(image, np.ndarray):
+        image = Image.fromarray(image)
+    
+    # Resize
+    image = image.resize((IMG_SIZE, IMG_SIZE))
+    
+    # Convert to RGB
+    if image.mode != 'RGB':
+        image = image.convert('RGB')
+    
+    # Convert to array and normalize
+    img_array = np.array(image).astype('float32') / 255.0
+    
+    # Add batch dimension
+    img_array = np.expand_dims(img_array, axis=0)
+    
+    return img_array
+
+
+def normalize_class_name(class_name):
+    """Normalize class names for matching across models"""
+    normalized = str(class_name).lower()
+    normalized = normalized.replace('_', ' ')
+    normalized = normalized.replace('-', ' ')
+    normalized = normalized.strip()
+    return normalized
+
+
+def ensemble_predict(image, top_k=3):
+    """
+    Predict using ensemble of models with weighted voting
+    
+    Args:
+        image: PIL Image object
+        top_k: Number of top predictions to return
+        
+    Returns:
+        dict with ensemble predictions and individual model results
+    """
+    # Preprocess image
+    processed_image = preprocess_image_for_ensemble(image)
+    
+    # Get predictions from all models
+    all_predictions = []
+    individual_results = {}
+    
+    print("\n" + "=" * 60)
+    print("RUNNING ENSEMBLE PREDICTION")
+    print("=" * 60)
+    
+    for model_info in ENSEMBLE_MODELS:
+        print(f"\n{model_info['name']} (weight: {model_info['weight']}):")
+        
+        # Predict
+        probs = model_info['model'].predict(processed_image, verbose=0)[0]
+        
+        # Get top prediction for this model
+        top_idx = np.argmax(probs)
+        top_class = model_info['classes'][top_idx]
+        top_conf = probs[top_idx]
+        
+        print(f"  → {top_class} ({top_conf*100:.2f}%)")
+        
+        all_predictions.append({
+            'name': model_info['name'],
+            'classes': model_info['classes'],
+            'probs': probs,
+            'weight': model_info['weight']
+        })
+        
+        individual_results[model_info['name']] = {
+            'prediction': top_class,
+            'confidence': f"{top_conf * 100:.2f}%",
+            'confidence_raw': float(top_conf),
+            'weight': model_info['weight']
+        }
+    
+    # Aggregate predictions using weighted voting
+    class_scores = {}
+    
+    for pred in all_predictions:
+        for idx, prob in enumerate(pred['probs']):
+            cls = pred['classes'][idx]
+            normalized_cls = normalize_class_name(cls)
+            
+            if normalized_cls not in class_scores:
+                class_scores[normalized_cls] = {
+                    'score': 0.0,
+                    'original_name': cls,
+                    'models': []
+                }
+            
+            class_scores[normalized_cls]['score'] += prob * pred['weight']
+            class_scores[normalized_cls]['models'].append({
+                'model': pred['name'],
+                'confidence': float(prob)
+            })
+    
+    # Sort by aggregated confidence
+    sorted_predictions = sorted(
+        class_scores.items(),
+        key=lambda x: x[1]['score'],
+        reverse=True
+    )[:top_k]
+    
+    # Format results
+    ensemble_results = []
+    for normalized_cls, data in sorted_predictions:
+        ensemble_results.append({
+            'class': data['original_name'],
+            'confidence': float(data['score']),
+            'confidence_percentage': f"{data['score'] * 100:.2f}%",
+            'contributing_models': data['models']
+        })
+    
+    print("\n" + "=" * 60)
+    print(f"🎯 ENSEMBLE PREDICTION: {ensemble_results[0]['class']}")
+    print(f"   Confidence: {ensemble_results[0]['confidence_percentage']}")
+    print("=" * 60 + "\n")
+    
+    return {
+        'ensemble_predictions': ensemble_results,
+        'individual_models': individual_results,
+        'top_prediction': ensemble_results[0]['class'],
+        'confidence': ensemble_results[0]['confidence_percentage']
+    }
+
 def predict_from_bytes(img_bytes: bytes):
+    """
+    Predict from image bytes using ensemble
+    
+    Args:
+        img_bytes: Image bytes
+        
+    Returns:
+        tuple: (top_prediction, top3_predictions) in old format for compatibility
+    """
     if not img_bytes:
         raise ValueError("empty file")
-
-    x = prepare(img_bytes)  
-    probs = model.predict(x)[0]
-    top_idx = int(np.argmax(probs))
-    top = {"label": CLASS_NAMES[top_idx], "prob": round(float(probs[top_idx]) * 100, 2)}
-    top3_idx = np.argsort(probs)[-3:][::-1]
-    top3 = [{"label": CLASS_NAMES[int(i)], "prob": round(float(probs[i]) * 100, 2)} for i in top3_idx]
+    
+    try:
+        # Open image
+        with Image.open(io.BytesIO(img_bytes)) as test_im:
+            test_im.verify()
+        image = Image.open(io.BytesIO(img_bytes))
+    except UnidentifiedImageError:
+        raise ValueError("unsupported or corrupt image format (try JPG/PNG).")
+    except OSError as e:
+        raise ValueError(f"image decode error: {e}")
+    
+    # Get ensemble predictions
+    results = ensemble_predict(image, top_k=3)
+    
+    # Format in old style for /upload endpoint compatibility
+    top = {
+        "label": results['top_prediction'],
+        "prob": float(results['ensemble_predictions'][0]['confidence'] * 100)
+    }
+    
+    top3 = [
+        {
+            "label": pred['class'],
+            "prob": float(pred['confidence'] * 100)
+        }
+        for pred in results['ensemble_predictions']
+    ]
+    
     return top, top3
-# Load model and labels once at startup
-IMG_SIZE = (128, 128) 
-ALLOWED_EXT = {"jpg", "jpeg", "png", "webp", "heic", "heif", "avif"}
-
-DIVIDE_BY_255 = False
-
-model = keras.models.load_model("skin_mobilenetv3.keras", compile=False)
-with open("mobilenetv3_labels.json") as f:
-    CLASS_NAMES = json.load(f)
 
 @app.route("/")
 def index():
@@ -176,31 +412,80 @@ def refresh():
 def allowed_file(filename: str) -> bool:
     return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_EXT
 
-def prepare(img_bytes: bytes) -> np.ndarray:
-    try:
-        with Image.open(io.BytesIO(img_bytes)) as test_im:
-            test_im.verify() 
-        with Image.open(io.BytesIO(img_bytes)) as im:
-            im = im.convert("RGB").resize(IMG_SIZE)
-            x = np.array(im, dtype=np.float32)[None, ...]
-    except UnidentifiedImageError:
-        raise ValueError("unsupported or corrupt image format (try JPG/PNG).")
-    except OSError as e:
-        raise ValueError(f"image decode error: {e}")
+# def prepare(img_bytes: bytes) -> np.ndarray:
+#     try:
+#         with Image.open(io.BytesIO(img_bytes)) as test_im:
+#             test_im.verify() 
+#         with Image.open(io.BytesIO(img_bytes)) as im:
+#             im = im.convert("RGB").resize(IMG_SIZE)
+#             x = np.array(im, dtype=np.float32)[None, ...]
+#     except UnidentifiedImageError:
+#         raise ValueError("unsupported or corrupt image format (try JPG/PNG).")
+#     except OSError as e:
+#         raise ValueError(f"image decode error: {e}")
 
-    if DIVIDE_BY_255:
-        x = x / 255.0
-    return x
+#     if DIVIDE_BY_255:
+#         x = x / 255.0
+#     return x
 
 # Get skin condition by image
-@app.post("/predict")
+# @app.post("/predict")
+# def predict():
+#     file = request.files.get("image")
+#     try:
+#         top, top3 = predict_from_file(file)
+#     except ValueError as e:
+#         return jsonify({"error": str(e)}), 400
+#     return jsonify({"top": top, "top3": top3})
+
+@app.route('/api/predict', methods=['POST'])
 def predict():
-    file = request.files.get("image")
+    """Predict skin lesion using ensemble"""
     try:
-        top, top3 = predict_from_file(file)
-    except ValueError as e:
-        return jsonify({"error": str(e)}), 400
-    return jsonify({"top": top, "top3": top3})
+        # Get image from request
+        if 'image' not in request.files:
+            return jsonify({
+                'success': False,
+                'error': 'No image provided'
+            }), 400
+        
+        file = request.files['image']
+        
+        # Validate file type
+        if not file.filename.lower().endswith(('.png', '.jpg', '.jpeg', '.heic')):
+            return jsonify({
+                'success': False,
+                'error': 'Invalid file type'
+            }), 400
+        
+        # Read image
+        image_bytes = file.read()
+        image = Image.open(io.BytesIO(image_bytes))
+        
+        # Get predictions
+        top_k = int(request.form.get('top_k', 3))
+        results = ensemble_predict(image, top_k=top_k)
+        
+        # Return results
+        return jsonify({
+            'success': True,
+            'prediction': {
+                'class': results['top_prediction'],
+                'confidence': results['confidence']
+            },
+            'top_predictions': results['ensemble_predictions'],
+            'model_breakdown': results['individual_models']
+        }), 200
+        
+    except Exception as e:
+        print(f"Prediction error: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
 
 # Upload skin lesion image, questionnaire + store ML report
 @app.route("/upload", methods=["POST"])
@@ -238,11 +523,19 @@ def upload_report():
     except Exception as e:
         return jsonify({"error": f"S3 upload failed: {e.__class__.__name__}: {e}"}), 502
     
+    # Initialize condition with default values
+    condition = None
     docs = mongo.db.treatments.find({})
     for doc in docs:
         if doc["lesionType"].lower() in top["label"].lower():
             condition = doc
             break
+
+    # If no specific treatment found, use default
+    if condition is None:
+        condition = {
+            "treatment": "Please consult with a healthcare professional for proper diagnosis and treatment recommendations."
+        }
 
     id = ObjectId()
 
@@ -337,7 +630,7 @@ docsearch = PineconeVectorStore.from_existing_index(
 retriever = docsearch.as_retriever(search_type="similarity", search_kwargs={"k":3})
 
 llm = ChatGoogleGenerativeAI(
-    model="gemini-2.0-flash",
+    model="gemini-2.5-flash",
     temperature=0,
     max_tokens=None,
     timeout=None,
@@ -514,7 +807,7 @@ def ask():
         
         report_text = report_to_text(latest_report)
         
-        docs = retriever.get_relevant_documents(msg)
+        docs = retriever.invoke(msg)
         
         # Build context and final prompt input
         docs_text = "\n\n---\n\n".join(d.page_content for d in docs)
@@ -547,4 +840,15 @@ def ask():
         return jsonify({"error": str(e)}), 500
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    try:
+        print("\n" + "="*60)
+        print("🚀 STARTING FLASK SERVER")
+        print("="*60)
+        app.run(debug=True, port=5002, host='0.0.0.0')
+    except Exception as e:
+        print("\n" + "="*60)
+        print("❌ FLASK FAILED TO START")
+        print("="*60)
+        print(f"\nError: {e}")
+        import traceback
+        traceback.print_exc()

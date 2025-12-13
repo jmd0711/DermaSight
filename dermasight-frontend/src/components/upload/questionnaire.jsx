@@ -75,7 +75,7 @@ const Questionnaire = ({ croppedImage, setData }) => {
     selectedSymptoms.forEach(s => formData.append("symptoms", s))
     formData.append("additional", additional)
 
-    fetch("http://localhost:5000/upload", {
+    fetch("http://localhost:5002/upload", {
       method: "POST",
       headers: {
         Authorization: `Bearer ${localStorage.getItem("accessToken")}`,

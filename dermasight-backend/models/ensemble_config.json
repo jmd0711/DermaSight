@@ -1,0 +1,27 @@
+{
+  "models": [
+    {
+      "name": "HAM10000",
+      "path": "models/ham10000/ham10000_model.h5",
+      "classes_path": "models/ham10000/ham10000_classes.json",
+      "accuracy": 0.8424,
+      "weight": 0.40
+    },
+    {
+      "name": "Skin_Diseases",
+      "path": "models/skin_diseases/skin_diseases_model.h5",
+      "classes_path": "models/skin_diseases/skin_diseases_classes.json",
+      "accuracy": 0.7909,
+      "weight": 0.37
+    },
+    {
+      "name": "DermNet",
+      "path": "models/dermnet/dermnet_model.h5",
+      "classes_path": "models/dermnet/dermnet_classes.json",
+      "accuracy": 0.7132,
+      "weight": 0.23
+    }
+  ],
+  "voting_strategy": "weighted_average",
+  "img_size": 224
+}
